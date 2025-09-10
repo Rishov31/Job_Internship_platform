@@ -1,0 +1,28 @@
+.grid{
+    height: 10px;
+    width: 10px;
+    background: white;
+    margin:2px;
+}
+.grid-container{
+    display: grid;
+    grid-template-columns: repeat(5,1fr);
+    grid-template-rows: repeat(6,1fr);
+    gap:2px;
+    margin: 5px;
+}
+
+.activate{
+    background: #2E4A73;
+}
+.light{
+    background-color: #818CA0;
+}
+
+@media (max-width: 1000px){
+    
+    .grid{
+        height: 6px;
+        width: 6px;
+    }
+}

@@ -1,0 +1,147 @@
+.main{
+  display: flex;
+}
+
+*{
+  color:#464D5F;
+}
+
+.sidebar{
+  z-index:10000;
+}
+.miain{
+  display:flex;
+  flex-direction:row;
+
+}
+.posted-jobs-container {
+  margin:20px;
+  display:flex;
+  flex-direction:column;
+  align-items: center;
+  
+  color:#464D5F;
+  /* min-height: 100vh; */
+  width:100%;
+}
+
+#i412 p{
+  font-size:13px;
+  font-weight:500;
+}
+
+.i411{
+  border: white;
+  color:white;
+  background-color:#464D5F;
+  border-radius:5px;
+  padding:6px;
+  padding-left:10px;
+  padding-right:10px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+
+}
+
+.posted-jobs-container{
+  background-color: #f5f5f5;
+
+}
+
+
+.posted-jobs {
+  /* display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  max-width:80%;
+  gap: 20px; */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  row-gap: 0px;
+}
+.job-board{
+  flex-basis: 80%;
+  display:flex;
+  flex-direction:column;
+  justify-content: flex-end;
+  margin-left:auto;
+  box-sizing: border-box;
+  align-items: center;
+}
+
+.job-card {
+  margin:30px;
+  min-width:300px;
+  display:flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 2px 2px 2px 2px hsla(0, 0%, 50%, 0.262);
+  transition: transform 0.3s ease;
+}
+.job-card:hover{
+  transform: scale(1.02);
+}
+
+
+.job-card h3 {
+  margin-bottom: 10px;
+}
+
+.job-card p {
+  margin: 5px 0;
+}
+
+.job-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  margin-top:-10px;
+  height:100%;
+
+}
+
+.edit-btn, .close-btn {
+  padding: 8px 12px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.edit-btn {
+  background-color: #6187D0;
+  color: white;
+}
+
+.close-btn {
+  background-color: #ff4d4d;
+  color: white;
+}
+
+.title{
+  display:flex;
+  justify-content:space-between;
+
+  align-items:center;
+  font-size:20px;
+}
+.title h3{
+  max-width:210px;
+
+}
+.bodies{
+  display:flex;
+  justify-content:space-between;
+}
+
+#close{
+  background-color: #ff4d4d;
+  margin-top:10px;
+
+}
+#close:hover{
+  background-color: #af2626;
+}

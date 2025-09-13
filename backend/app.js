@@ -22,6 +22,7 @@ app.use(cookieParser());
 // Routes
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/users", require("./src/routes/userRoutes"));
+app.use("/api/jobs", require("./src/routes/jobRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

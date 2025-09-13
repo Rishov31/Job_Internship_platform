@@ -13,8 +13,17 @@ export default function Register() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await registerUser(form);
-      navigate("/login");
+      const response = await registerUser(form);
+      // Redirect based on user role
+      if (response.user?.role === "employer") {
+        navigate("/employer/dashboard");
+      } else if (response.user?.role === "jobseeker") {
+        navigate("/jobseeker/dashboard");
+      } else if (response.user?.role === "mentor") {
+        navigate("/mentor/dashboard");
+      } else {
+        navigate("/login");
+      }
     } finally {
       setSubmitting(false);
     }

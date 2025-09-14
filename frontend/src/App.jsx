@@ -14,17 +14,17 @@ import ManageJobs from "./pages/Jobs/ManageJobs";
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      
-      {/* Employer Routes */}
-      <Route path="/employer/dashboard" element={<EmployerDashboard />} />
-      <Route path="/employer/profile" element={<EmployerProfile />} />
-      <Route path="/employer/post-job" element={<PostJob />} />
-      <Route path="/employer/jobs" element={<ManageJobs />} />
-    </Routes>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Employer Routes */}
+        <Route path="/employer/dashboard" element={<EmployerDashboard />} />
+        <Route path="/employer/profile" element={<EmployerProfile />} />
+        <Route path="/employer/post-job" element={<PostJob />} />
+        <Route path="/employer/jobs" element={<ManageJobs />} />
+      </Routes>
   );
 }
 

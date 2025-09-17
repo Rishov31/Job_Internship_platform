@@ -112,7 +112,7 @@ export default function PostJob() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <span className="text-sky-600 font-extrabold text-xl">INTERNSHALA</span>
+              <span className="text-sky-600 font-extrabold text-xl">HireMe</span>
               <span className="text-gray-400">|</span>
               <span className="text-gray-700 font-medium">Post New Job</span>
             </div>

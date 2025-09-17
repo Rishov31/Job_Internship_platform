@@ -21,7 +21,7 @@ export default function LandingPage() {
                 <path d="M3 14c6-2 12-2 18 0" stroke="#0284c7" strokeWidth="2" strokeLinecap="round"/>
                 <path d="M4 10c5-2 11-2 16 0" stroke="#0ea5e9" strokeWidth="2" strokeLinecap="round"/>
               </svg>
-              <span className="text-sky-600 font-extrabold text-xl">INTERNSHALA</span>
+              <span className="text-sky-600 font-extrabold text-xl">HireMe</span>
             </span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm">
@@ -123,7 +123,7 @@ export default function LandingPage() {
 
       <footer className="mt-auto border-t">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-sm text-gray-600 flex flex-wrap items-center justify-between gap-3">
-          <div>© {new Date().getFullYear()} Internshala clone demo</div>
+          <div>© {new Date().getFullYear()} HireMe</div>
           <div className="flex items-center gap-4">
             <a className="hover:underline">Privacy</a>
             <a className="hover:underline">Terms</a>

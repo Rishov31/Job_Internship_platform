@@ -33,7 +33,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow">
         <div className="text-center">
-          <div className="text-sky-600 font-extrabold text-xl">INTERNSHALA</div>
+          <div className="text-sky-600 font-extrabold text-xl">HireMe</div>
           <h1 className="mt-2 text-2xl font-bold">Login</h1>
           <p className="mt-1 text-sm text-gray-600">Welcome back! Please sign in.</p>
         </div>

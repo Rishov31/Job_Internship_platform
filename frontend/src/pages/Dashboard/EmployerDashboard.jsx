@@ -87,7 +87,7 @@
 //           <div className="flex items-center justify-between h-16">
 //             <div className="flex items-center gap-4">
 //               <span className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-//                 INTERNSHALA
+//                 HireMe
 //               </span>
 //               <div className="w-px h-6 bg-gradient-to-b from-gray-300 to-gray-400"></div>
 //               <span className="text-gray-700 font-semibold">Employer Dashboard</span>
@@ -269,7 +269,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getJobStats, getEmployerJobs } from "../../api/jobApi";
+import { getJobStats, getEmployerJobs, updateJobStatus } from "../../api/jobApi";
 import { me } from "../../api/authApi";
 
 export default function EmployerDashboard() {
@@ -283,6 +283,27 @@ export default function EmployerDashboard() {
   });
   const [recentJobs, setRecentJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const handleStatusChange = async (jobId, newStatus) => {
+    try {
+      await updateJobStatus(jobId, newStatus);
+      
+      // Update the local state to reflect the status change
+      setRecentJobs(prevJobs => 
+        prevJobs.map(job => 
+          job._id === jobId ? { ...job, status: newStatus } : job
+        )
+      );
+      
+      // Update the stats
+      const statsData = await getJobStats();
+      setStats(statsData);
+      
+    } catch (error) {
+      console.error("Failed to update job status:", error);
+      alert("Failed to update job status. Please try again.");
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -384,7 +405,7 @@ export default function EmployerDashboard() {
                   <span className="text-white font-bold text-lg">I</span>
                 </div>
                 <span className="text-3xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                  INTERNSHALA
+                  HireMe
                 </span>
               </div>
               <div className="hidden lg:flex items-center gap-2">
@@ -589,9 +610,21 @@ export default function EmployerDashboard() {
                     </div>
                     
                     <div className="flex items-center gap-3">
+                      <div className="relative group">
+                        <button 
+                          onClick={() => handleStatusChange(job._id, job.status === 'active' ? 'paused' : 'active')}
+                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300 ${
+                            job.status === 'active' 
+                              ? 'bg-amber-100 text-amber-800 hover:bg-amber-200' 
+                              : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                          }`}
+                        >
+                          {job.status === 'active' ? '⏸ Pause' : '▶ Activate'}
+                        </button>
+                      </div>
                       <Link
                         to={`/employer/jobs/${job._id}/edit`}
-                        className="group flex items-center gap-2 px-6 py-3 bg-gray-50 text-gray-700 rounded-2xl hover:bg-gray-100 hover:text-gray-900 transition-all duration-300 font-semibold border border-gray-200 hover:border-gray-300 hover:scale-105"
+                        className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-700 rounded-xl hover:bg-gray-100 hover:text-gray-900 transition-all duration-300 font-semibold border border-gray-200 hover:border-gray-300"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -600,7 +633,9 @@ export default function EmployerDashboard() {
                       </Link>
                       <Link
                         to={`/jobs/${job._id}`}
-                        className="group flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-50 to-purple-50 text-blue-700 rounded-2xl hover:from-blue-100 hover:to-purple-100 hover:text-blue-900 transition-all duration-300 font-semibold border border-blue-200 hover:border-blue-300 hover:scale-105"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-xl hover:bg-blue-100 hover:text-blue-900 transition-all duration-300 font-semibold border border-blue-200 hover:border-blue-300"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

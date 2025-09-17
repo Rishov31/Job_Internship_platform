@@ -11,6 +11,11 @@ import EmployerProfile from "./pages/Dashboard/EmployerProfile";
 // Job components
 import PostJob from "./pages/Jobs/PostJob";
 import ManageJobs from "./pages/Jobs/ManageJobs";
+import JobSeekerDashboard from "./pages/Dashboard/JobSeekerDashboard";
+import JobSeekerProfile from "./pages/Dashboard/JobSeekerProfile";
+import JobSeekerApplications from "./pages/Dashboard/JobSeekerApplications";
+import JobSeekerJobList from "./pages/Jobs/JobSeekerJobList";
+import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
 
 export default function App() {
   return (
@@ -24,6 +29,13 @@ export default function App() {
         <Route path="/employer/profile" element={<EmployerProfile />} />
         <Route path="/employer/post-job" element={<PostJob />} />
         <Route path="/employer/jobs" element={<ManageJobs />} />
+
+      {/* Jobseeker Routes */}
+      <Route path="/jobseeker/dashboard" element={<JobSeekerDashboard />} />
+      <Route path="/jobseeker/profile" element={<JobSeekerProfile />} />
+      <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
+      <Route path="/jobseeker/jobs" element={<JobSeekerJobList />} />
+      <Route path="/jobseeker/jobs/:jobId" element={<JobSeekerApplyJob />} />
       </Routes>
   );
 }

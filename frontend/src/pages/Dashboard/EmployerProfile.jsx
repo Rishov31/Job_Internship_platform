@@ -202,7 +202,7 @@ export default function EmployerProfile() {
                     placeholder="+91 98765 43210"
                   />
                 </div>
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Profile Picture URL
                   </label>
@@ -214,9 +214,9 @@ export default function EmployerProfile() {
                     className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     placeholder="https://example.com/profile.jpg"
                   />
-                </div>
+                </div> */}
               </div>
-              <div className="mt-4">
+              {/* <div className="mt-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Bio
                 </label>
@@ -228,7 +228,7 @@ export default function EmployerProfile() {
                   className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
                   placeholder="Tell us about yourself and your role in the company..."
                 />
-              </div>
+              </div> */}
             </div>
 
             {/* Company Information */}
@@ -261,7 +261,7 @@ export default function EmployerProfile() {
                     placeholder="https://company.com"
                   />
                 </div>
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Company Logo URL
                   </label>
@@ -273,7 +273,7 @@ export default function EmployerProfile() {
                     className="w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     placeholder="https://company.com/logo.png"
                   />
-                </div>
+                </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Company Size

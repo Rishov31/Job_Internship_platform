@@ -7,6 +7,7 @@ import Register from "./pages/Register";
 // Dashboard components
 import EmployerDashboard from "./pages/Dashboard/EmployerDashboard";
 import EmployerProfile from "./pages/Dashboard/EmployerProfile";
+import AdminDashboard from "./pages/Dashboard/AdminDashboard";
 
 // Job components
 import PostJob from "./pages/Jobs/PostJob";
@@ -20,6 +21,11 @@ import JobSeekerProfile from "./pages/Dashboard/JobSeekerProfile";
 import JobSeekerApplications from "./pages/Dashboard/JobSeekerApplications";
 import JobSeekerJobList from "./pages/Jobs/JobSeekerJobList";
 import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
+
+// Resource components
+import ResourceManagement from "./pages/Resources/ResourceManagement";
+import ResourceList from "./pages/Resources/ResourceList";
+import ResourceDetails from "./pages/Resources/ResourceDetails";
 
 
 export default function App() {
@@ -45,6 +51,14 @@ export default function App() {
       <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
       <Route path="/jobseeker/jobs" element={<JobSeekerJobList />} />
       <Route path="/jobseeker/jobs/:jobId" element={<JobSeekerApplyJob />} />
+
+      {/* Admin Routes */}
+      <Route path="/admin/dashboard" element={<AdminDashboard />} />
+      <Route path="/admin/resources" element={<ResourceManagement />} />
+
+      {/* Public Resource Routes */}
+      <Route path="/resources" element={<ResourceList />} />
+      <Route path="/resources/:id" element={<ResourceDetails />} />
       </Routes>
   );
 }

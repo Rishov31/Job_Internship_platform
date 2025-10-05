@@ -21,6 +21,8 @@ export default function Register() {
         navigate("/jobseeker/dashboard");
       } else if (response.user?.role === "mentor") {
         navigate("/mentor/dashboard");
+      } else if (response.user?.role === "others") {
+        navigate("/login");
       } else {
         navigate("/login");
       }
@@ -82,6 +84,7 @@ export default function Register() {
               <option value="jobseeker">Job Seeker</option>
               <option value="employer">Employer</option>
               <option value="mentor">Mentor</option>
+              <option value="others">Others</option>
             </select>
           </div>
           <button

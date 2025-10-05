@@ -20,10 +20,10 @@ exports.register = async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await User.create({ fullName, email, passwordHash, role });
-    const token = createToken({ id: user._id, role: user.role });
+    const token = createToken({ id: user._id, role: user.role, isAdmin: user.isAdmin });
     res.cookie("token", token, { httpOnly: true, sameSite: "lax" });
     return res.status(201).json({
-      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role },
+      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin },
       token,
     });
   } catch (err) {
@@ -34,7 +34,7 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email }).select("+passwordHash fullName email role");
+    const user = await User.findOne({ email }).select("+passwordHash fullName email role isAdmin");
     if (!user) return res.status(401).json({ message: "Invalid credentials" });
 
     const ok = await bcrypt.compare(password, user.passwordHash);
@@ -43,10 +43,10 @@ exports.login = async (req, res, next) => {
     user.lastLoginAt = new Date();
     await user.save();
 
-    const token = createToken({ id: user._id, role: user.role });
+    const token = createToken({ id: user._id, role: user.role, isAdmin: user.isAdmin });
     res.cookie("token", token, { httpOnly: true, sameSite: "lax" });
     return res.json({
-      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role },
+      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin },
       token,
     });
   } catch (err) {
@@ -66,7 +66,7 @@ exports.me = async (req, res, next) => {
     }
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ message: "User not found" });
-    return res.json({ id: user._id, fullName: user.fullName, email: user.email, role: user.role });
+    return res.json({ id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin });
   } catch (err) {
     next(err);
   }

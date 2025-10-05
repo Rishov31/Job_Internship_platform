@@ -18,7 +18,8 @@ export async function loginUser(payload) {
     credentials: "include",
   });
   if (!res.ok) throw new Error("Login failed");
-  return res.json();
+  const data = await res.json();
+  return data;
 }
 
 export async function me() {

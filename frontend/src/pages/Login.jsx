@@ -14,8 +14,10 @@ export default function Login() {
     setSubmitting(true);
     try {
       const response = await loginUser(form);
-      // Redirect based on user role
-      if (response.user?.role === "employer") {
+      // Redirect based on user role and admin status
+      if (response.user?.isAdmin) {
+        navigate("/admin/dashboard");
+      } else if (response.user?.role === "employer") {
         navigate("/employer/dashboard");
       } else if (response.user?.role === "jobseeker") {
         navigate("/jobseeker/dashboard");

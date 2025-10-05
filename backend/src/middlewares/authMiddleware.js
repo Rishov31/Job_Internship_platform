@@ -15,7 +15,7 @@ module.exports = async function authMiddleware(req, res, next) {
     }
     const user = await User.findById(decoded.id);
     if (!user) return res.status(401).json({ message: "User not found" });
-    req.user = { id: user._id.toString(), role: user.role };
+    req.user = { id: user._id.toString(), role: user.role, isAdmin: user.isAdmin };
     next();
   } catch (err) {
     next(err);

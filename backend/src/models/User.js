@@ -24,8 +24,13 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["jobseeker", "employer", "mentor", "admin"],
+      enum: ["jobseeker", "employer", "mentor", "others"],
       default: "jobseeker",
+      index: true,
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false,
       index: true,
     },
     avatarUrl: {

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getAllResources } from "../../api/resourceApi";
 
 export default function JobSeekerDashboard() {
   const [completion, setCompletion] = useState({ completionPercentage: 0, isProfileComplete: false });
   const [recent, setRecent] = useState([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, shortlisted: 0, interview: 0 });
+  const [resources, setResources] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -20,6 +22,11 @@ export default function JobSeekerDashboard() {
           interview: apps.filter(a=>a.status==="interview").length,
         });
       }).catch(()=>{});
+
+    // Fetch a few featured/public resources for the dashboard
+    getAllResources({ featured: true, limit: 3 }).then((data)=>{
+      setResources(data.resources || []);
+    }).catch(()=> setResources([]));
   }, []);
 
   return (
@@ -33,6 +40,36 @@ export default function JobSeekerDashboard() {
           <div className="flex gap-3">
             <Link to="/jobseeker/profile" className="px-4 py-2 border rounded">Profile</Link>
             <Link to="/jobseeker/jobs" className="px-4 py-2 bg-blue-600 text-white rounded">Find Jobs</Link>
+          </div>
+
+          {/* Career Guidance section */}
+          <div className="bg-white border rounded p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold">Career Guidance</h2>
+              <Link to="/resources" className="text-blue-600 text-sm">View all</Link>
+            </div>
+            {resources.length === 0 ? (
+              <div className="text-gray-500 text-sm">No resources yet. Check back soon.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {resources.map((r)=> (
+                  <Link key={r._id} to={`/resources/${r._id}`} className="group border rounded p-4 hover:shadow transition">
+                    <div className="flex gap-3 items-start">
+                      {r.thumbnailUrl ? (
+                        <img src={r.thumbnailUrl} alt={r.title} className="w-20 h-14 object-cover rounded" />
+                      ) : (
+                        <div className="w-20 h-14 bg-gray-100 rounded" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs uppercase tracking-wide text-gray-500">{r.type}</div>
+                        <div className="font-medium text-gray-900 truncate group-hover:text-blue-600">{r.title}</div>
+                        <div className="text-xs text-gray-500 truncate">{r.category?.replace('-', ' ')}</div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

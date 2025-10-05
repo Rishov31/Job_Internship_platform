@@ -11,13 +11,31 @@ const getAuthHeaders = () => {
 export const getAllResources = async (params = {}) => {
   const queryParams = new URLSearchParams(params).toString();
   const response = await fetch(`${API_BASE_URL}/resources?${queryParams}`);
-  if (!response.ok) throw new Error('Failed to fetch resources');
+  if (!response.ok) {
+    let msg = 'Failed to fetch resources';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
 export const getResource = async (resourceId) => {
   const response = await fetch(`${API_BASE_URL}/resources/${resourceId}`);
-  if (!response.ok) throw new Error('Failed to fetch resource');
+  if (!response.ok) {
+    let msg = 'Failed to fetch resource';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
@@ -28,7 +46,16 @@ export const likeResource = async (resourceId, action = 'like') => {
     credentials: 'include',
     body: JSON.stringify({ action }),
   });
-  if (!response.ok) throw new Error('Failed to like/unlike resource');
+  if (!response.ok) {
+    let msg = 'Failed to like/unlike resource';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
@@ -39,7 +66,16 @@ export const getAdminResources = async (params = {}) => {
     headers: getAuthHeaders(),
     credentials: 'include',
   });
-  if (!response.ok) throw new Error('Failed to fetch admin resources');
+  if (!response.ok) {
+    let msg = 'Failed to fetch admin resources';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
@@ -50,7 +86,16 @@ export const createResource = async (resourceData) => {
     credentials: 'include',
     body: JSON.stringify(resourceData),
   });
-  if (!response.ok) throw new Error('Failed to create resource');
+  if (!response.ok) {
+    let msg = 'Failed to create resource';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
@@ -61,7 +106,16 @@ export const updateResource = async (resourceId, resourceData) => {
     credentials: 'include',
     body: JSON.stringify(resourceData),
   });
-  if (!response.ok) throw new Error('Failed to update resource');
+  if (!response.ok) {
+    let msg = 'Failed to update resource';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };
 
@@ -71,6 +125,15 @@ export const deleteResource = async (resourceId) => {
     headers: getAuthHeaders(),
     credentials: 'include',
   });
-  if (!response.ok) throw new Error('Failed to delete resource');
+  if (!response.ok) {
+    let msg = 'Failed to delete resource';
+    try {
+      const err = await response.json();
+      msg = `${response.status} ${response.statusText}: ${err?.message || msg}`;
+    } catch (_) {
+      msg = `${response.status} ${response.statusText}: ${msg}`;
+    }
+    throw new Error(msg);
+  }
   return response.json();
 };

@@ -79,7 +79,7 @@ export default function ResourceManagement() {
       if (fileInput) fileInput.value = '';
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Upload failed. Please try again.');
+      alert(`Upload failed. ${error?.message || 'Please try again.'}`);
     } finally {
       setUploading(false);
     }
@@ -88,6 +88,15 @@ export default function ResourceManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Basic validation based on type
+      if (formData.type === 'video' && !formData.videoUrl) {
+        alert('Please upload a video or provide a Video URL before saving.');
+        return;
+      }
+      if ((formData.type === 'article' || formData.type === 'blog') && !formData.content?.trim()) {
+        alert('Content is required for articles and blogs.');
+        return;
+      }
       const resourceData = {
         ...formData,
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
@@ -116,7 +125,7 @@ export default function ResourceManagement() {
       fetchResources();
     } catch (error) {
       console.error("Error saving resource:", error);
-      alert("Error saving resource. Please try again.");
+      alert(`Error saving resource. ${error?.message || 'Please try again.'}`);
     }
   };
 

@@ -446,9 +446,9 @@ export default function EmployerDashboard() {
           </div>
           <h1 className="text-5xl lg:text-6xl font-black bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-4 leading-tight">
             Welcome back,<br />
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            {/* <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               {user?.fullName}!
-            </span>
+            </span> */}
           </h1>
           <p className="text-xl text-gray-600 font-medium">Manage your job postings and track applications with ease</p>
         </div>

@@ -12,21 +12,31 @@ import AdminDashboard from "./pages/Dashboard/AdminDashboard";
 // Job components
 import PostJob from "./pages/Jobs/PostJob";
 import ManageJobs from "./pages/Jobs/ManageJobs";
+<<<<<<< HEAD
 
 import JobDetails from "./pages/Jobs/JobDetails";
 import EditJob from "./pages/Jobs/EditJob";
 
+=======
+import JobDetails from "./pages/Jobs/JobDetails";
+import EditJob from "./pages/Jobs/EditJob";
+>>>>>>> a9a0d3e53ac0444e2f078fffe2d0fb0fdbf2186f
 import JobSeekerDashboard from "./pages/Dashboard/JobSeekerDashboard";
 import JobSeekerProfile from "./pages/Dashboard/JobSeekerProfile";
 import JobSeekerApplications from "./pages/Dashboard/JobSeekerApplications";
 import JobSeekerJobList from "./pages/Jobs/JobSeekerJobList";
 import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
+<<<<<<< HEAD
 
 // Resource components
 import ResourceManagement from "./pages/Resources/ResourceManagement";
 import ResourceList from "./pages/Resources/ResourceList";
 import ResourceDetails from "./pages/Resources/ResourceDetails";
 
+=======
+import MentorDashboard from "./pages/Dashboard/MentorDashboard";
+import MentorshipList from "./pages/Mentorship/MentorshipList";
+>>>>>>> a9a0d3e53ac0444e2f078fffe2d0fb0fdbf2186f
 
 export default function App() {
   return (
@@ -51,6 +61,7 @@ export default function App() {
       <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
       <Route path="/jobseeker/jobs" element={<JobSeekerJobList />} />
       <Route path="/jobseeker/jobs/:jobId" element={<JobSeekerApplyJob />} />
+<<<<<<< HEAD
 
       {/* Admin Routes */}
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -59,6 +70,12 @@ export default function App() {
       {/* Public Resource Routes */}
       <Route path="/resources" element={<ResourceList />} />
       <Route path="/resources/:id" element={<ResourceDetails />} />
+=======
+      <Route path="/jobseeker/mentoring" element={<MentorshipList />} />
+
+      {/* Mentor Routes */}
+      <Route path="/mentor/dashboard" element={<MentorDashboard />} />
+>>>>>>> a9a0d3e53ac0444e2f078fffe2d0fb0fdbf2186f
       </Routes>
   );
 }

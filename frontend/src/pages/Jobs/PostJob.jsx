@@ -471,7 +471,7 @@ export default function PostJob() {
                     placeholder="https://company.com"
                   />
                 </div>
-                <div>
+                {/* <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Company Size
                   </label>
@@ -486,7 +486,7 @@ export default function PostJob() {
                       <option key={size} value={size}>{size} employees</option>
                     ))}
                   </select>
-                </div>
+                </div> */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Industry

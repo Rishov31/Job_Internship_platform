@@ -99,7 +99,6 @@ export default function JobSeekerProfile(){
 
       <div className="flex gap-2 mb-4 flex-wrap">
         {tabBtn("personal","Personal")}
-        {tabBtn("professional","Professional")}
         {tabBtn("skills","Skills")}
         {tabBtn("education","Education")}
         {tabBtn("experience","Experience")}
@@ -115,25 +114,20 @@ export default function JobSeekerProfile(){
             <input className="border rounded px-3 py-2" placeholder="Last name" disabled={!editing}
               value={form?.personalInfo?.lastName||""}
               onChange={e=>update("personalInfo","lastName",e.target.value)} />
-            <input className="border rounded px-3 py-2" placeholder="Phone" disabled={!editing}
+            <input className="border rounded px-3 py-2" placeholder="Mobile (10 digits)" disabled={!editing}
               value={form?.personalInfo?.phone||""}
-              onChange={e=>update("personalInfo","phone",e.target.value)} />
-            <input className="border rounded px-3 py-2" placeholder="City" disabled={!editing}
+              onChange={e=>{
+                const value = e.target.value;
+                if (value.length <= 10 && /^\d*$/.test(value)) {
+                  update("personalInfo","phone",value);
+                }
+              }} />
+            <input className="border rounded px-3 py-2" placeholder="Location" disabled={!editing}
               value={form?.personalInfo?.address?.city||""}
               onChange={e=>update("personalInfo","address",{ ...(form?.personalInfo?.address||{}), city:e.target.value })} />
           </div>
         )}
 
-        {activeTab==="professional" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input className="border rounded px-3 py-2" placeholder="Current title" disabled={!editing}
-              value={form?.professionalInfo?.currentTitle||""}
-              onChange={e=>update("professionalInfo","currentTitle",e.target.value)} />
-            <input type="number" className="border rounded px-3 py-2" placeholder="Years of experience" disabled={!editing}
-              value={form?.professionalInfo?.yearsOfExperience||0}
-              onChange={e=>update("professionalInfo","yearsOfExperience",Number(e.target.value||0))} />
-          </div>
-        )}
 
         {activeTab==="skills" && (
           <div className="space-y-4">
@@ -176,15 +170,14 @@ export default function JobSeekerProfile(){
           <div className="space-y-4">
             {(form.education||[]).map((ed,i)=> (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start border rounded p-3">
-                <input className="border rounded px-3 py-2" placeholder="Institution" disabled={!editing} value={ed.institution||""} onChange={e=>updateArrayItem("education",i,"institution",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="Institution name" disabled={!editing} value={ed.institution||""} onChange={e=>updateArrayItem("education",i,"institution",e.target.value)} />
                 <input className="border rounded px-3 py-2" placeholder="Degree" disabled={!editing} value={ed.degree||""} onChange={e=>updateArrayItem("education",i,"degree",e.target.value)} />
-                <input className="border rounded px-3 py-2" placeholder="Field of study" disabled={!editing} value={ed.fieldOfStudy||""} onChange={e=>updateArrayItem("education",i,"fieldOfStudy",e.target.value)} />
-                <input type="date" className="border rounded px-3 py-2" disabled={!editing} value={ed.startDate?ed.startDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("education",i,"startDate",e.target.value)} />
-                <input type="date" className="border rounded px-3 py-2" disabled={!editing} value={ed.endDate?ed.endDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("education",i,"endDate",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="Start date" disabled={!editing} value={ed.startDate?ed.startDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("education",i,"startDate",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="End date" disabled={!editing} value={ed.endDate?ed.endDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("education",i,"endDate",e.target.value)} />
                 {editing && (<button onClick={()=>removeArrayItem("education",i)} className="px-3 py-2 border rounded">Remove</button>)}
               </div>
             ))}
-            {editing && (<button onClick={()=>addArrayItem("education",{ institution:"", degree:"", fieldOfStudy:"" })} className="px-4 py-2 border rounded">Add education</button>)}
+            {editing && (<button onClick={()=>addArrayItem("education",{ institution:"", degree:"" })} className="px-4 py-2 border rounded">Add education</button>)}
           </div>
         )}
 
@@ -192,11 +185,11 @@ export default function JobSeekerProfile(){
           <div className="space-y-4">
             {(form.experience||[]).map((ex,i)=> (
               <div key={i} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start border rounded p-3">
-                <input className="border rounded px-3 py-2" placeholder="Company" disabled={!editing} value={ex.company||""} onChange={e=>updateArrayItem("experience",i,"company",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="Company name" disabled={!editing} value={ex.company||""} onChange={e=>updateArrayItem("experience",i,"company",e.target.value)} />
                 <input className="border rounded px-3 py-2" placeholder="Position" disabled={!editing} value={ex.position||""} onChange={e=>updateArrayItem("experience",i,"position",e.target.value)} />
                 <input className="border rounded px-3 py-2" placeholder="Location" disabled={!editing} value={ex.location||""} onChange={e=>updateArrayItem("experience",i,"location",e.target.value)} />
-                <input type="date" className="border rounded px-3 py-2" disabled={!editing} value={ex.startDate?ex.startDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("experience",i,"startDate",e.target.value)} />
-                <input type="date" className="border rounded px-3 py-2" disabled={!editing} value={ex.endDate?ex.endDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("experience",i,"endDate",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="Start date" disabled={!editing} value={ex.startDate?ex.startDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("experience",i,"startDate",e.target.value)} />
+                <input className="border rounded px-3 py-2" placeholder="End date" disabled={!editing} value={ex.endDate?ex.endDate.toString().substring(0,10):""} onChange={e=>updateArrayItem("experience",i,"endDate",e.target.value)} />
                 {editing && (<button onClick={()=>removeArrayItem("experience",i)} className="px-3 py-2 border rounded">Remove</button>)}
               </div>
             ))}

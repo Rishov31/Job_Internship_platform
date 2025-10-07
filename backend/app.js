@@ -25,6 +25,8 @@ app.use("/api/users", require("./src/routes/userRoutes"));
 app.use("/api/jobs", require("./src/routes/jobRoutes"));
 app.use("/api/jobseeker", require("./src/routes/jobSeekerRoutes"));
 app.use("/api/applications", require("./src/routes/applicationRoutes"));
+app.use("/api/mentors", require("./src/routes/mentorRoutes"));
+app.use("/api/bookings", require("./src/routes/bookingRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

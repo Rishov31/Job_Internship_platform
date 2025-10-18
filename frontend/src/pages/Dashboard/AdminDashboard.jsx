@@ -434,6 +434,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getDashboardStats, getAllUsers, getAllJobs } from "../../api/adminApi";
 import { getAdminResources } from "../../api/resourceApi";
+import { getScrapingStats, triggerScraping, startScheduler, stopScheduler, getSchedulerStatus, cleanupExpiredData } from "../../api/scraperApi";
 
 // Icons
 const StatsIcon = () => (
@@ -466,6 +467,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [resources, setResources] = useState([]);
+  const [scraperStats, setScraperStats] = useState(null);
+  const [schedulerStatus, setSchedulerStatus] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -476,17 +479,21 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
       
-      const [statsData, usersData, jobsData, resourcesData] = await Promise.all([
+      const [statsData, usersData, jobsData, resourcesData, scraperStatsData, schedulerStatusData] = await Promise.all([
         getDashboardStats(),
         getAllUsers({ limit: 5 }),
         getAllJobs({ limit: 5 }),
-        getAdminResources({ limit: 5 })
+        getAdminResources({ limit: 5 }),
+        getScrapingStats().catch(() => null),
+        getSchedulerStatus().catch(() => null)
       ]);
       
       setStats(statsData);
       setUsers(usersData.users || []);
       setJobs(jobsData.jobs || []);
       setResources(resourcesData.resources || []);
+      setScraperStats(scraperStatsData);
+      setSchedulerStatus(schedulerStatusData);
       
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -506,6 +513,7 @@ export default function AdminDashboard() {
     { id: "users", label: "Users", icon: UsersIcon },
     { id: "jobs", label: "Jobs", icon: JobsIcon },
     { id: "resources", label: "Resources", icon: ResourcesIcon },
+    { id: "scraper", label: "Scraper", icon: StatsIcon },
   ];
 
   const renderOverview = () => (
@@ -819,6 +827,170 @@ export default function AdminDashboard() {
     </div>
   );
 
+  const renderScraper = () => (
+    <div className="space-y-8">
+      {/* Scraper Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Scheduler Status</p>
+              <p className={`text-2xl font-bold ${schedulerStatus?.isInitialized ? 'text-green-600' : 'text-red-600'}`}>
+                {schedulerStatus?.isInitialized ? 'Active' : 'Inactive'}
+              </p>
+            </div>
+            <div className={`w-4 h-4 rounded-full ${schedulerStatus?.isInitialized ? 'bg-green-400' : 'bg-red-400'}`}></div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div>
+            <p className="text-sm font-medium text-gray-600">Total Scraped Jobs</p>
+            <p className="text-2xl font-bold text-blue-600">
+              {scraperStats?.jobs?.reduce((sum, item) => sum + item.total, 0) || 0}
+            </p>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div>
+            <p className="text-sm font-medium text-gray-600">Total Scraped Internships</p>
+            <p className="text-2xl font-bold text-purple-600">
+              {scraperStats?.internships?.reduce((sum, item) => sum + item.total, 0) || 0}
+            </p>
+          </div>
+        </div>
+        
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div>
+            <p className="text-sm font-medium text-gray-600">Active Jobs</p>
+            <p className="text-2xl font-bold text-green-600">
+              {scraperStats?.jobs?.reduce((sum, item) => sum + item.active, 0) || 0}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Scraper Management */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Scheduler Control</h3>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Daily Auto-scraping</span>
+              <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
+                schedulerStatus?.isInitialized ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {schedulerStatus?.isInitialized ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={async () => {
+                  try {
+                    await startScheduler();
+                    await fetchDashboardData();
+                  } catch (error) {
+                    console.error('Error starting scheduler:', error);
+                  }
+                }}
+                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Start Scheduler
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    await stopScheduler();
+                    await fetchDashboardData();
+                  } catch (error) {
+                    console.error('Error stopping scheduler:', error);
+                  }
+                }}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Stop Scheduler
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Manual Operations</h3>
+          <div className="space-y-4">
+            <button
+              onClick={async () => {
+                try {
+                  await triggerScraping();
+                  alert('Scraping triggered successfully!');
+                  await fetchDashboardData();
+                } catch (error) {
+                  console.error('Error triggering scraping:', error);
+                  alert('Error triggering scraping: ' + error.message);
+                }
+              }}
+              className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+            >
+              Trigger Scraping Now
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await cleanupExpiredData();
+                  alert('Cleanup completed successfully!');
+                  await fetchDashboardData();
+                } catch (error) {
+                  console.error('Error cleaning up:', error);
+                  alert('Error cleaning up: ' + error.message);
+                }
+              }}
+              className="w-full bg-orange-600 text-white px-4 py-3 rounded-lg hover:bg-orange-700 transition-colors font-semibold"
+            >
+              Cleanup Expired Data
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Source Statistics */}
+      {scraperStats && (
+        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <h3 className="text-xl font-bold text-gray-900 mb-6">Source Statistics</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3">Jobs by Source</h4>
+              <div className="space-y-2">
+                {scraperStats.jobs?.map((source) => (
+                  <div key={source._id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="font-medium capitalize">{source._id}</span>
+                    <div className="flex space-x-4 text-sm">
+                      <span className="text-green-600">Active: {source.active}</span>
+                      <span className="text-gray-600">Total: {source.total}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold text-gray-800 mb-3">Internships by Source</h4>
+              <div className="space-y-2">
+                {scraperStats.internships?.map((source) => (
+                  <div key={source._id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span className="font-medium capitalize">{source._id}</span>
+                    <div className="flex space-x-4 text-sm">
+                      <span className="text-green-600">Active: {source.active}</span>
+                      <span className="text-gray-600">Total: {source.total}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case "overview":
@@ -829,6 +1001,8 @@ export default function AdminDashboard() {
         return renderJobs();
       case "resources":
         return renderResources();
+      case "scraper":
+        return renderScraper();
       default:
         return renderOverview();
     }

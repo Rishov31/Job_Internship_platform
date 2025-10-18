@@ -24,7 +24,7 @@ exports.getDashboardStats = async (req, res, next) => {
       Resource.countDocuments(),
       User.find().sort({ createdAt: -1 }).limit(5).select("fullName email role createdAt"),
       Job.find().sort({ createdAt: -1 }).limit(5).select("title company createdAt status"),
-      Application.find().sort({ createdAt: -1 }).limit(5).populate("user", "fullName").populate("job", "title")
+  Application.find().sort({ createdAt: -1 }).limit(5).populate("applicant", "fullName").populate("job", "title")
     ]);
 
     // Get user counts by role

@@ -20,6 +20,9 @@ import JobSeekerApplications from "./pages/Dashboard/JobSeekerApplications";
 import JobSeekerJobList from "./pages/Jobs/JobSeekerJobList";
 import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
 
+// Internship components
+import InternshipList from "./pages/Internships/InternshipList";
+
 // Resource components
 import ResourceManagement from "./pages/Resources/ResourceManagement";
 import ResourceList from "./pages/Resources/ResourceList";
@@ -51,6 +54,7 @@ export default function App() {
       <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
       <Route path="/jobseeker/jobs" element={<JobSeekerJobList />} />
       <Route path="/jobseeker/jobs/:jobId" element={<JobSeekerApplyJob />} />
+      <Route path="/jobseeker/internships" element={<InternshipList />} />
 
       {/* Admin Routes */}
       <Route path="/admin/dashboard" element={<AdminDashboard />} />

@@ -1,4 +1,5 @@
 const Job = require("../models/Job");
+const ScrapedJob = require("../models/ScrapedJob");
 const User = require("../models/User");
 
 // Create a new job posting
@@ -31,7 +32,7 @@ exports.createJob = async (req, res, next) => {
   }
 };
 
-// Get all jobs with filtering and pagination
+// Get all jobs with filtering and pagination (including scraped jobs)
 exports.getAllJobs = async (req, res, next) => {
   try {
     const {
@@ -42,35 +43,70 @@ exports.getAllJobs = async (req, res, next) => {
       location,
       search,
       status = 'active',
+      includeScraped = 'true'
     } = req.query;
 
     const filter = { status };
+    const scrapedFilter = { status: 'active' }; // Only active scraped jobs
 
     // Apply filters
-    if (jobType) filter.jobType = jobType;
-    if (category) filter.category = new RegExp(category, 'i');
-    if (location) filter.location = new RegExp(location, 'i');
+    if (jobType) {
+      filter.jobType = jobType;
+      scrapedFilter.jobType = jobType;
+    }
+    if (category) {
+      filter.category = new RegExp(category, 'i');
+      scrapedFilter.category = new RegExp(category, 'i');
+    }
+    if (location) {
+      filter.location = new RegExp(location, 'i');
+      scrapedFilter.location = new RegExp(location, 'i');
+    }
     if (search) {
       filter.$text = { $search: search };
+      scrapedFilter.$text = { $search: search };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    const jobs = await Job.find(filter)
-      .populate('employer', 'fullName email companyDetails')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Get both regular and scraped jobs
+    const [regularJobs, scrapedJobs] = await Promise.all([
+      Job.find(filter)
+        .populate('employer', 'fullName email companyDetails')
+        .sort({ createdAt: -1 })
+        .lean(),
+      includeScraped === 'true' ? 
+        ScrapedJob.find(scrapedFilter)
+          .sort({ lastScraped: -1 })
+          .lean() : []
+    ]);
 
-    const total = await Job.countDocuments(filter);
+    // Combine and format jobs
+    const allJobs = [
+      ...regularJobs.map(job => ({ ...job, isScraped: false, source: 'internal' })),
+      ...scrapedJobs.map(job => ({ ...job, isScraped: true, employer: null }))
+    ];
+
+    // Sort combined results by date (most recent first)
+    allJobs.sort((a, b) => {
+      const dateA = a.createdAt || a.lastScraped;
+      const dateB = b.createdAt || b.lastScraped;
+      return new Date(dateB) - new Date(dateA);
+    });
+
+    // Apply pagination to combined results
+    const paginatedJobs = allJobs.slice(skip, skip + parseInt(limit));
+    const total = allJobs.length;
 
     res.json({
-      jobs,
+      jobs: paginatedJobs,
       pagination: {
         current: parseInt(page),
         total: Math.ceil(total / parseInt(limit)),
-        count: jobs.length,
+        count: paginatedJobs.length,
         totalJobs: total,
+        regularJobs: regularJobs.length,
+        scrapedJobs: scrapedJobs.length
       },
     });
   } catch (error) {
@@ -78,17 +114,27 @@ exports.getAllJobs = async (req, res, next) => {
   }
 };
 
-// Get job by ID
+// Get job by ID (handles both regular and scraped jobs)
 exports.getJobById = async (req, res, next) => {
   try {
-    const job = await Job.findById(req.params.id)
+    const { id } = req.params;
+    
+    // Try to find in regular jobs first
+    let job = await Job.findById(id)
       .populate('employer', 'fullName email companyDetails');
     
-    if (!job) {
-      return res.status(404).json({ message: "Job not found" });
+    if (job) {
+      return res.json({ ...job.toObject(), isScraped: false, source: 'internal' });
     }
-
-    res.json(job);
+    
+    // If not found, try scraped jobs
+    job = await ScrapedJob.findById(id);
+    
+    if (job) {
+      return res.json({ ...job.toObject(), isScraped: true, employer: null });
+    }
+    
+    return res.status(404).json({ message: "Job not found" });
   } catch (error) {
     next(error);
   }

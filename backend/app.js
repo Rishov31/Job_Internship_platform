@@ -25,6 +25,7 @@ app.use(cookieParser());
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/users", require("./src/routes/userRoutes"));
 app.use("/api/jobs", require("./src/routes/jobRoutes"));
+app.use("/api/internships", require("./src/routes/internshipRoutes"));
 app.use("/api/jobseeker", require("./src/routes/jobSeekerRoutes"));
 app.use("/api/applications", require("./src/routes/applicationRoutes"));
 app.use("/api/admin", require("./src/routes/adminRoutes"));
@@ -32,6 +33,7 @@ app.use("/api/resources", require("./src/routes/resourceRoutes"));
 app.use("/api/cloudinary", require("./src/routes/cloudinaryRoutes"));
 app.use("/api/mentors", require("./src/routes/mentorRoutes"));
 app.use("/api/bookings", require("./src/routes/bookingRoutes"));
+app.use("/api/scraper", require("./src/routes/scraperRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {
@@ -42,7 +44,15 @@ app.get("/", (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  
+  // Initialize scheduler after server starts
+  const schedulerService = require('./src/services/schedulerService');
+  schedulerService.init();
+  schedulerService.start();
+  console.log('📅 Scheduler initialized and started');
+});
 
 // Generic error handler (ensures JSON error responses)
 // eslint-disable-next-line no-unused-vars

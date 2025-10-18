@@ -53,7 +53,8 @@ export default function App() {
       <Route path="/jobseeker/profile" element={<JobSeekerProfile />} />
       <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
       <Route path="/jobseeker/jobs" element={<JobSeekerJobList />} />
-      <Route path="/jobseeker/jobs/:jobId" element={<JobSeekerApplyJob />} />
+      <Route path="/jobseeker/jobs/:id" element={<JobDetails />} />
+      <Route path="/jobseeker/jobs/:jobId/apply" element={<JobSeekerApplyJob />} />
       <Route path="/jobseeker/internships" element={<InternshipList />} />
 
       {/* Admin Routes */}

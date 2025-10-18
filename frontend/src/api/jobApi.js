@@ -95,3 +95,56 @@ export async function getJobStats() {
   if (!res.ok) throw new Error("Failed to fetch job stats");
   return res.json();
 }
+
+// Save/Bookmark a job
+export async function saveJob(jobId, isScraped = false) {
+  const res = await fetch(`${API_BASE}/jobs/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ jobId, isScraped }),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || "Failed to save job");
+  }
+  return res.json();
+}
+
+// Remove saved job
+export async function unsaveJob(jobId, isScraped = false) {
+  const res = await fetch(`${API_BASE}/jobs/unsave`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ jobId, isScraped }),
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || "Failed to unsave job");
+  }
+  return res.json();
+}
+
+// Get user's saved jobs
+export async function getSavedJobs(params = {}) {
+  const queryString = new URLSearchParams(params).toString();
+  const res = await fetch(`${API_BASE}/jobs/saved/list?${queryString}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to fetch saved jobs");
+  return res.json();
+}
+
+// Check if jobs are saved by user
+export async function checkSavedJobs(jobIds, isScraped = false) {
+  const queryString = new URLSearchParams({ 
+    jobIds: jobIds.join(','), 
+    isScraped: isScraped.toString() 
+  }).toString();
+  const res = await fetch(`${API_BASE}/jobs/saved/check?${queryString}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to check saved jobs");
+  return res.json();
+}

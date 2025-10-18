@@ -8,8 +8,16 @@ const jobController = require("../controllers/jobController");
 router.get("/", jobController.getAllJobs);
 router.get("/:id", jobController.getJobById);
 
-// Protected routes - Employer only
+// Protected routes - All authenticated users
 router.use(auth);
+
+// Job seeker routes
+router.post("/save", jobController.saveJob);
+router.delete("/unsave", jobController.unsaveJob);
+router.get("/saved/list", jobController.getSavedJobs);
+router.get("/saved/check", jobController.checkSavedJobs);
+
+// Employer only routes
 router.use(requireRole("employer"));
 
 // Employer job management

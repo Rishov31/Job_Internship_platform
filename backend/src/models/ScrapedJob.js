@@ -46,6 +46,12 @@ const scrapedJobSchema = new mongoose.Schema(
       currency: { type: String, default: "INR" },
       period: { type: String, enum: ["monthly", "yearly", "hourly"], default: "monthly" },
       text: { type: String }, // Store salary as text from scraped data
+      // Detailed salary structure
+      probationDuration: { type: String, default: "3 months" },
+      probationSalaryMin: { type: Number },
+      probationSalaryMax: { type: Number },
+      annualCTCMin: { type: Number },
+      annualCTCMax: { type: Number },
     },
     skills: [{
       type: String,
@@ -59,8 +65,37 @@ const scrapedJobSchema = new mongoose.Schema(
       type: String,
       trim: true,
     }],
+    // Additional detailed fields
+    keyResponsibilities: [{
+      type: String,
+      trim: true,
+    }],
+    workEnvironmentRequirements: [{
+      type: String,
+      trim: true,
+    }],
+    educationQualifications: [{
+      type: String,
+      trim: true,
+    }],
+    otherRequirements: [{
+      type: String,
+      trim: true,
+    }],
+    whyCompany: [{
+      type: String,
+      trim: true,
+    }],
     applicationDeadline: {
       type: Date,
+    },
+    startDate: {
+      type: String,
+      default: "Immediately",
+    },
+    numberOfOpenings: {
+      type: Number,
+      default: 1,
     },
     status: {
       type: String,
@@ -69,6 +104,14 @@ const scrapedJobSchema = new mongoose.Schema(
       index: true,
     },
     isRemote: {
+      type: Boolean,
+      default: false,
+    },
+    isFresher: {
+      type: Boolean,
+      default: false,
+    },
+    isUrgent: {
       type: Boolean,
       default: false,
     },
@@ -93,6 +136,10 @@ const scrapedJobSchema = new mongoose.Schema(
       description: String,
       size: String,
       industry: String,
+      // Company activity stats
+      hiringSince: { type: String, default: "January 2020" },
+      opportunitiesPosted: { type: Number, default: 0 },
+      candidatesHired: { type: Number, default: 0 },
     },
     lastScraped: {
       type: Date,

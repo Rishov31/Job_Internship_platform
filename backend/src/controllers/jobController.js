@@ -1,5 +1,6 @@
 const Job = require("../models/Job");
 const ScrapedJob = require("../models/ScrapedJob");
+const SavedJob = require("../models/SavedJob");
 const User = require("../models/User");
 
 // Create a new job posting
@@ -37,19 +38,26 @@ exports.getAllJobs = async (req, res, next) => {
   try {
     const {
       page = 1,
-      limit = 10,
+      limit = 20,
       jobType,
       category,
       location,
       search,
       status = 'active',
-      includeScraped = 'true'
+      includeScraped = 'true',
+      salaryMin,
+      salaryMax,
+      isRemote,
+      experience,
+      skills,
+      sortBy = 'date', // date, salary, rating
+      sortOrder = 'desc'
     } = req.query;
 
     const filter = { status };
     const scrapedFilter = { status: 'active' }; // Only active scraped jobs
 
-    // Apply filters
+    // Apply basic filters
     if (jobType) {
       filter.jobType = jobType;
       scrapedFilter.jobType = jobType;
@@ -65,6 +73,39 @@ exports.getAllJobs = async (req, res, next) => {
     if (search) {
       filter.$text = { $search: search };
       scrapedFilter.$text = { $search: search };
+    }
+    if (isRemote !== undefined) {
+      filter.isRemote = isRemote === 'true';
+      scrapedFilter.isRemote = isRemote === 'true';
+    }
+    if (experience) {
+      const expNum = parseInt(experience);
+      if (!isNaN(expNum)) {
+        filter['experience.min'] = { $lte: expNum };
+        filter['experience.max'] = { $gte: expNum };
+        scrapedFilter['experience.min'] = { $lte: expNum };
+        scrapedFilter['experience.max'] = { $gte: expNum };
+      }
+    }
+    if (skills) {
+      const skillsArray = skills.split(',').map(s => s.trim());
+      filter.skills = { $in: skillsArray.map(s => new RegExp(s, 'i')) };
+      scrapedFilter.skills = { $in: skillsArray.map(s => new RegExp(s, 'i')) };
+    }
+
+    // Salary filtering
+    if (salaryMin || salaryMax) {
+      const salaryFilter = {};
+      if (salaryMin && !isNaN(parseInt(salaryMin))) {
+        salaryFilter['salary.min'] = { $gte: parseInt(salaryMin) };
+      }
+      if (salaryMax && !isNaN(parseInt(salaryMax))) {
+        salaryFilter['salary.max'] = { $lte: parseInt(salaryMax) };
+      }
+      if (Object.keys(salaryFilter).length > 0) {
+        Object.assign(filter, salaryFilter);
+        Object.assign(scrapedFilter, salaryFilter);
+      }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -83,15 +124,44 @@ exports.getAllJobs = async (req, res, next) => {
 
     // Combine and format jobs
     const allJobs = [
-      ...regularJobs.map(job => ({ ...job, isScraped: false, source: 'internal' })),
-      ...scrapedJobs.map(job => ({ ...job, isScraped: true, employer: null }))
+      ...regularJobs.map(job => ({ 
+        ...job, 
+        isScraped: false, 
+        source: 'internal',
+        rating: 4.5, // Mock rating for now
+        applicationsCount: job.applicationsCount || Math.floor(Math.random() * 50) + 1
+      })),
+      ...scrapedJobs.map(job => ({ 
+        ...job, 
+        isScraped: true, 
+        employer: null,
+        rating: 4.0 + Math.random() * 0.5, // Mock rating
+        applicationsCount: Math.floor(Math.random() * 100) + 1
+      }))
     ];
 
-    // Sort combined results by date (most recent first)
+    // Apply sorting
     allJobs.sort((a, b) => {
-      const dateA = a.createdAt || a.lastScraped;
-      const dateB = b.createdAt || b.lastScraped;
-      return new Date(dateB) - new Date(dateA);
+      let comparison = 0;
+      
+      switch (sortBy) {
+        case 'salary':
+          const salaryA = a.salary?.min || 0;
+          const salaryB = b.salary?.min || 0;
+          comparison = salaryA - salaryB;
+          break;
+        case 'rating':
+          comparison = (a.rating || 0) - (b.rating || 0);
+          break;
+        case 'date':
+        default:
+          const dateA = new Date(a.createdAt || a.lastScraped);
+          const dateB = new Date(b.createdAt || b.lastScraped);
+          comparison = dateA - dateB;
+          break;
+      }
+      
+      return sortOrder === 'desc' ? -comparison : comparison;
     });
 
     // Apply pagination to combined results
@@ -124,14 +194,132 @@ exports.getJobById = async (req, res, next) => {
       .populate('employer', 'fullName email companyDetails');
     
     if (job) {
-      return res.json({ ...job.toObject(), isScraped: false, source: 'internal' });
+      // Add mock data for missing fields to match Internshala format
+      const enhancedJob = {
+        ...job.toObject(),
+        isScraped: false,
+        source: 'internal',
+        applicationsCount: job.applicationsCount || Math.floor(Math.random() * 100) + 1,
+        // Ensure all required fields have default values
+        skills: job.skills || ['Communication', 'Teamwork', 'Problem Solving'],
+        keyResponsibilities: job.keyResponsibilities || [
+          'Execute assigned tasks efficiently',
+          'Collaborate with team members',
+          'Meet project deadlines',
+          'Maintain quality standards'
+        ],
+        workEnvironmentRequirements: job.workEnvironmentRequirements || [
+          'Professional work environment',
+          'Basic computer skills',
+          'Good communication skills'
+        ],
+        educationQualifications: job.educationQualifications || [
+          'Bachelor\'s degree in relevant field',
+          'Any equivalent qualification'
+        ],
+        otherRequirements: job.otherRequirements || [
+          'Strong work ethic',
+          'Ability to learn quickly',
+          'Good interpersonal skills'
+        ],
+        whyCompany: job.whyCompany || [
+          'Competitive salary package',
+          'Professional growth opportunities',
+          'Positive work environment',
+          'Learning and development programs'
+        ],
+        requirements: job.requirements || [
+          'Relevant educational background',
+          'Good communication skills',
+          'Basic computer knowledge',
+          'Team player attitude'
+        ],
+        benefits: job.benefits || [
+          'Health insurance',
+          'Paid time off',
+          'Professional development',
+          'Flexible working hours'
+        ],
+        startDate: job.startDate || 'Immediately',
+        numberOfOpenings: job.numberOfOpenings || 1,
+        isFresher: job.isFresher || false,
+        isUrgent: job.isUrgent || false,
+        companyDetails: {
+          ...job.companyDetails,
+          description: job.companyDetails?.description || `${job.company} is a growing company looking for talented individuals to join our team. We offer a dynamic work environment with opportunities for professional growth and development.`,
+          hiringSince: job.companyDetails?.hiringSince || 'January 2020',
+          opportunitiesPosted: job.companyDetails?.opportunitiesPosted || Math.floor(Math.random() * 50) + 10,
+          candidatesHired: job.companyDetails?.candidatesHired || Math.floor(Math.random() * 20) + 5
+        }
+      };
+      
+      return res.json(enhancedJob);
     }
     
     // If not found, try scraped jobs
     job = await ScrapedJob.findById(id);
     
     if (job) {
-      return res.json({ ...job.toObject(), isScraped: true, employer: null });
+      // Add mock data for missing fields to match Internshala format
+      const enhancedJob = {
+        ...job.toObject(),
+        isScraped: true,
+        employer: null,
+        applicationsCount: Math.floor(Math.random() * 100) + 1,
+        // Ensure all required fields have default values
+        skills: job.skills || ['Communication', 'Teamwork', 'Problem Solving'],
+        keyResponsibilities: job.keyResponsibilities || [
+          'Execute assigned tasks efficiently',
+          'Collaborate with team members',
+          'Meet project deadlines',
+          'Maintain quality standards'
+        ],
+        workEnvironmentRequirements: job.workEnvironmentRequirements || [
+          'Professional work environment',
+          'Basic computer skills',
+          'Good communication skills'
+        ],
+        educationQualifications: job.educationQualifications || [
+          'Bachelor\'s degree in relevant field',
+          'Any equivalent qualification'
+        ],
+        otherRequirements: job.otherRequirements || [
+          'Strong work ethic',
+          'Ability to learn quickly',
+          'Good interpersonal skills'
+        ],
+        whyCompany: job.whyCompany || [
+          'Competitive salary package',
+          'Professional growth opportunities',
+          'Positive work environment',
+          'Learning and development programs'
+        ],
+        requirements: job.requirements || [
+          'Relevant educational background',
+          'Good communication skills',
+          'Basic computer knowledge',
+          'Team player attitude'
+        ],
+        benefits: job.benefits || [
+          'Health insurance',
+          'Paid time off',
+          'Professional development',
+          'Flexible working hours'
+        ],
+        startDate: job.startDate || 'Immediately',
+        numberOfOpenings: job.numberOfOpenings || 1,
+        isFresher: job.isFresher || false,
+        isUrgent: job.isUrgent || false,
+        companyDetails: {
+          ...job.companyDetails,
+          description: job.companyDetails?.description || `${job.company} is a growing company looking for talented individuals to join our team. We offer a dynamic work environment with opportunities for professional growth and development.`,
+          hiringSince: job.companyDetails?.hiringSince || 'January 2020',
+          opportunitiesPosted: job.companyDetails?.opportunitiesPosted || Math.floor(Math.random() * 50) + 10,
+          candidatesHired: job.companyDetails?.candidatesHired || Math.floor(Math.random() * 20) + 5
+        }
+      };
+      
+      return res.json(enhancedJob);
     }
     
     return res.status(404).json({ message: "Job not found" });
@@ -266,6 +454,143 @@ exports.getJobStats = async (req, res, next) => {
     };
 
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Save/Bookmark a job
+exports.saveJob = async (req, res, next) => {
+  try {
+    const { jobId, isScraped } = req.body;
+    const userId = req.user.id;
+
+    if (!jobId) {
+      return res.status(400).json({ message: "Job ID is required" });
+    }
+
+    // Check if job is already saved
+    const existingSave = await SavedJob.findOne({
+      user: userId,
+      [isScraped ? 'scrapedJob' : 'job']: jobId
+    });
+
+    if (existingSave) {
+      return res.status(400).json({ message: "Job already saved" });
+    }
+
+    // Verify job exists
+    if (isScraped) {
+      const scrapedJob = await ScrapedJob.findById(jobId);
+      if (!scrapedJob) {
+        return res.status(404).json({ message: "Scraped job not found" });
+      }
+    } else {
+      const job = await Job.findById(jobId);
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+    }
+
+    // Save the job
+    const savedJob = await SavedJob.create({
+      user: userId,
+      [isScraped ? 'scrapedJob' : 'job']: jobId
+    });
+
+    res.status(201).json({
+      message: "Job saved successfully",
+      savedJob
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Remove saved job
+exports.unsaveJob = async (req, res, next) => {
+  try {
+    const { jobId, isScraped } = req.body;
+    const userId = req.user.id;
+
+    const savedJob = await SavedJob.findOneAndDelete({
+      user: userId,
+      [isScraped ? 'scrapedJob' : 'job']: jobId
+    });
+
+    if (!savedJob) {
+      return res.status(404).json({ message: "Saved job not found" });
+    }
+
+    res.json({ message: "Job removed from saved list" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get user's saved jobs
+exports.getSavedJobs = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const userId = req.user.id;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const savedJobs = await SavedJob.find({ user: userId })
+      .populate('job')
+      .populate('scrapedJob')
+      .sort({ savedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Format the response
+    const formattedJobs = savedJobs.map(savedJob => {
+      const job = savedJob.job || savedJob.scrapedJob;
+      return {
+        ...job.toObject(),
+        isScraped: !!savedJob.scrapedJob,
+        source: savedJob.scrapedJob ? 'external' : 'internal',
+        savedAt: savedJob.savedAt,
+        rating: 4.0 + Math.random() * 0.5 // Mock rating
+      };
+    });
+
+    const total = await SavedJob.countDocuments({ user: userId });
+
+    res.json({
+      jobs: formattedJobs,
+      pagination: {
+        current: parseInt(page),
+        total: Math.ceil(total / parseInt(limit)),
+        count: formattedJobs.length,
+        totalJobs: total
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Check if jobs are saved by user
+exports.checkSavedJobs = async (req, res, next) => {
+  try {
+    const { jobIds, isScraped } = req.query;
+    const userId = req.user.id;
+
+    if (!jobIds) {
+      return res.json({ savedJobs: [] });
+    }
+
+    const ids = jobIds.split(',');
+    const savedJobs = await SavedJob.find({
+      user: userId,
+      [isScraped === 'true' ? 'scrapedJob' : 'job']: { $in: ids }
+    });
+
+    const savedJobIds = savedJobs.map(savedJob => 
+      savedJob[isScraped === 'true' ? 'scrapedJob' : 'job'].toString()
+    );
+
+    res.json({ savedJobs: savedJobIds });
   } catch (error) {
     next(error);
   }

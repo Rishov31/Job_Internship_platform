@@ -110,6 +110,7 @@ app.use("/api/cloudinary", require("./src/routes/cloudinaryRoutes"));
 app.use("/api/mentors", require("./src/routes/mentorRoutes"));
 app.use("/api/bookings", require("./src/routes/bookingRoutes"));
 app.use("/api/scraper", require("./src/routes/scraperRoutes"));
+app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

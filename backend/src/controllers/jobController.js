@@ -2,6 +2,106 @@ const Job = require("../models/Job");
 const ScrapedJob = require("../models/ScrapedJob");
 const SavedJob = require("../models/SavedJob");
 const User = require("../models/User");
+const JobSeekerProfile = require("../models/JobSeekerProfile");
+const notificationService = require("../services/notificationService");
+const logger = require("../utils/logger");
+
+/**
+ * Send job alerts to job seekers who match the job criteria
+ * This function runs asynchronously and doesn't block the response
+ */
+async function sendJobAlertsToJobSeekers(job) {
+  try {
+    // Find all job seekers with job alerts enabled
+    const jobSeekerProfiles = await JobSeekerProfile.find({
+      'preferences.jobAlerts': { $ne: false }, // true or undefined (default is true)
+    }).populate('user', '_id fullName email');
+
+    if (!jobSeekerProfiles || jobSeekerProfiles.length === 0) {
+      logger.info('No job seekers with job alerts enabled found');
+      return;
+    }
+
+    // Prepare notifications for job seekers
+    const notifications = [];
+    const jobCategory = job.category?.toLowerCase();
+    const jobLocation = job.location?.toLowerCase();
+    const jobSkills = (job.skills || []).map(s => s.toLowerCase());
+
+    for (const profile of jobSeekerProfiles) {
+      if (!profile.user || !profile.user._id) continue;
+
+      // Check if job matches job seeker preferences (if they have any)
+      let shouldNotify = true;
+
+      // If job seeker has preferences, check if job matches
+      if (profile.preferences) {
+        // Check category match
+        if (profile.preferences.jobCategories && profile.preferences.jobCategories.length > 0) {
+          const preferredCategories = profile.preferences.jobCategories.map(c => c.toLowerCase());
+          if (jobCategory && !preferredCategories.some(cat => jobCategory.includes(cat) || cat.includes(jobCategory))) {
+            shouldNotify = false;
+          }
+        }
+
+        // Check location match
+        if (shouldNotify && profile.preferences.locations && profile.preferences.locations.length > 0) {
+          const preferredLocations = profile.preferences.locations.map(l => l.toLowerCase());
+          if (jobLocation && !preferredLocations.some(loc => jobLocation.includes(loc) || loc.includes(jobLocation))) {
+            shouldNotify = false;
+          }
+        }
+
+        // Check skills match (if job seeker has skills and job requires skills)
+        if (shouldNotify && jobSkills.length > 0 && profile.skills) {
+          const seekerSkills = [
+            ...(profile.skills.technical || []),
+            ...(profile.skills.soft || [])
+          ].map(s => s.toLowerCase());
+          
+          // If job seeker has skills, check for at least one match
+          if (seekerSkills.length > 0) {
+            const hasMatchingSkill = jobSkills.some(jobSkill => 
+              seekerSkills.some(seekerSkill => 
+                seekerSkill.includes(jobSkill) || jobSkill.includes(seekerSkill)
+              )
+            );
+            // If no matching skills, still notify (don't be too restrictive)
+            // Uncomment below to make it more restrictive:
+            // shouldNotify = hasMatchingSkill;
+          }
+        }
+      }
+
+      // If job seeker has job alerts disabled, skip
+      if (profile.preferences?.jobAlerts === false) {
+        shouldNotify = false;
+      }
+
+      if (shouldNotify) {
+        notifications.push({
+          user: profile.user._id, // Already an ObjectId from mongoose
+          type: 'job_alert',
+          title: `New Job Alert: ${job.title}`,
+          message: `A new ${job.category} position "${job.title}" at ${job.company} in ${job.location} has been posted.`,
+          relatedJob: job._id, // Already an ObjectId from mongoose
+          priority: 'medium',
+        });
+      }
+    }
+
+    if (notifications.length > 0) {
+      // Use bulk notification creation for efficiency
+      await notificationService.createBulkNotifications(notifications);
+      logger.info(`Sent ${notifications.length} job alerts for job: ${job.title}`);
+    } else {
+      logger.info(`No matching job seekers found for job: ${job.title}`);
+    }
+  } catch (error) {
+    logger.error('Error in sendJobAlertsToJobSeekers:', error);
+    throw error;
+  }
+}
 
 // Create a new job posting
 exports.createJob = async (req, res, next) => {
@@ -23,6 +123,21 @@ exports.createJob = async (req, res, next) => {
     
     // Populate employer details
     await job.populate('employer', 'fullName email companyDetails');
+    
+    // Create notification for employer (job published successfully)
+    await notificationService.createNotification({
+      userId: req.user.id,
+      type: 'job_published',
+      title: 'Job Published Successfully',
+      message: `Your job posting "${job.title}" has been published and is now live.`,
+      relatedJob: job._id.toString(),
+      priority: 'low',
+    });
+
+    // Send job alerts to job seekers asynchronously (don't block the response)
+    sendJobAlertsToJobSeekers(job).catch(error => {
+      logger.error('Error sending job alerts to job seekers:', error.message);
+    });
     
     res.status(201).json({
       message: "Job posted successfully",

@@ -30,6 +30,7 @@ import ResourceDetails from "./pages/Resources/ResourceDetails";
 
 import MentorDashboard from "./pages/Dashboard/MentorDashboard";
 import MentorshipList from "./pages/Mentorship/MentorshipList";
+import Notifications from "./pages/Notifications";
 
 export default function App() {
   return (
@@ -68,6 +69,9 @@ export default function App() {
 
       {/* Mentor Routes */}
       <Route path="/mentor/dashboard" element={<MentorDashboard />} />
+
+      {/* Notifications Route */}
+      <Route path="/notifications" element={<Notifications />} />
       </Routes>
   );
 }

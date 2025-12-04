@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const scraperService = require('./scraperService');
+const notificationService = require('./notificationService');
 const logger = require('../utils/logger');
 
 class SchedulerService {
@@ -52,7 +53,28 @@ class SchedulerService {
       timezone: "Asia/Kolkata"
     });
 
-    this.scheduledJobs.push(dailyScrapingJob, weeklyCleanupJob);
+    // Schedule daily job expiry check at 9 AM
+    const jobExpiryCheckJob = cron.schedule('0 9 * * *', async () => {
+      try {
+        const mongoose = require('mongoose');
+        
+        if (mongoose.connection.readyState !== 1) {
+          logger.warn('MongoDB is not connected. Skipping job expiry check.');
+          return;
+        }
+
+        logger.info('Starting scheduled job expiry check...');
+        await this.checkExpiringJobs();
+        logger.info('Job expiry check completed');
+      } catch (error) {
+        logger.error('Error in job expiry check:', error);
+      }
+    }, {
+      scheduled: false,
+      timezone: "Asia/Kolkata"
+    });
+
+    this.scheduledJobs.push(dailyScrapingJob, weeklyCleanupJob, jobExpiryCheckJob);
     this.isInitialized = true;
 
     logger.info('Scheduler service initialized successfully');
@@ -136,6 +158,57 @@ class SchedulerService {
       };
     } catch (error) {
       logger.error('Error in cleanup:', error);
+      throw error;
+    }
+  }
+
+  async checkExpiringJobs() {
+    try {
+      const Job = require('../models/Job');
+      const now = new Date();
+      const threeDaysFromNow = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000); // 3 days from now
+      const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+
+      // Find jobs expiring in the next 3 days
+      const jobsExpiringSoon = await Job.find({
+        status: 'active',
+        applicationDeadline: {
+          $gte: now,
+          $lte: threeDaysFromNow
+        }
+      }).populate('employer');
+
+      let notificationCount = 0;
+      for (const job of jobsExpiringSoon) {
+        // Check if we already sent a notification for this job in the last 24 hours
+        const Notification = require('../models/Notification');
+        const recentNotification = await Notification.findOne({
+          user: job.employer._id,
+          type: 'job_expiring_soon',
+          relatedJob: job._id,
+          createdAt: { $gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) }
+        });
+
+        if (!recentNotification) {
+          await notificationService.createNotification({
+            userId: job.employer._id.toString(),
+            type: 'job_expiring_soon',
+            title: 'Job Post Expiring Soon',
+            message: `Your job posting "${job.title}" is expiring in ${Math.ceil((job.applicationDeadline - now) / (24 * 60 * 60 * 1000))} days. Consider extending the deadline.`,
+            relatedJob: job._id.toString(),
+            metadata: {
+              daysUntilExpiry: Math.ceil((job.applicationDeadline - now) / (24 * 60 * 60 * 1000))
+            },
+            priority: 'medium',
+          });
+          notificationCount++;
+        }
+      }
+
+      logger.info(`Sent ${notificationCount} job expiry notifications`);
+      return { notificationsSent: notificationCount };
+    } catch (error) {
+      logger.error('Error checking expiring jobs:', error);
       throw error;
     }
   }

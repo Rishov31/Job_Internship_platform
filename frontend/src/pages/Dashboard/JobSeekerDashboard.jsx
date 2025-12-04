@@ -155,6 +155,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAllResources } from "../../api/resourceApi";
+import NotificationBell from "../../components/NotificationBell";
 
 export default function JobSeekerDashboard() {
   const [completion, setCompletion] = useState({ completionPercentage: 0, isProfileComplete: false });
@@ -277,12 +278,7 @@ export default function JobSeekerDashboard() {
             />
           </div>
           <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-gray-100 rounded-lg">
-              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-            </button>
+            <NotificationBell />
             <Link to="/jobseeker/profile" className="flex items-center gap-2">
               <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
                 <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

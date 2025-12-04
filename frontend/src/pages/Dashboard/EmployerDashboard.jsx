@@ -271,6 +271,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getJobStats, getEmployerJobs, updateJobStatus } from "../../api/jobApi";
 import { me } from "../../api/authApi";
+import NotificationBell from "../../components/NotificationBell";
 
 export default function EmployerDashboard() {
   const [user, setUser] = useState(null);
@@ -414,6 +415,7 @@ export default function EmployerDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-6">
+              <NotificationBell />
               <div className="hidden sm:flex items-center gap-4">
                 <div className="text-right">
                   <p className="text-sm text-gray-500">Welcome back</p>

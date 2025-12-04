@@ -283,7 +283,17 @@ export default function JobDetails() {
             {/* About the Job */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold mb-4">About the job:</h2>
-              <p className="text-gray-700 leading-relaxed">{job.description}</p>
+              {job.description ? (
+                <div className="text-gray-700 leading-relaxed whitespace-pre-line">
+                  {job.description.split('\n\n').map((paragraph, index) => (
+                    <p key={index} className="mb-4">
+                      {paragraph}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500 italic">No job description available</p>
+              )}
             </div>
 
             {/* Key Responsibilities */}

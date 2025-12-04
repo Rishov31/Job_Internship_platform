@@ -9,10 +9,86 @@ const app = express();
 
 const MONGO_URI = process.env.MONGODB_URI;
 
-mongoose
-  .connect(MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Connection Failed:", err));
+if (!MONGO_URI) {
+  console.error("❌ MONGODB_URI is not defined in environment variables");
+  process.exit(1);
+}
+
+// MongoDB connection with proper options
+const mongooseOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000, // 30 seconds - time to wait for server selection
+  socketTimeoutMS: 45000, // 45 seconds - time to wait for socket operations
+  connectTimeoutMS: 30000, // 30 seconds - time to wait for initial connection
+  maxPoolSize: 10, // Maintain up to 10 socket connections
+  minPoolSize: 5, // Maintain at least 5 socket connections
+  retryWrites: true,
+  w: 'majority',
+  // Retry connection on failure
+  retryReads: true,
+};
+
+// Connect to MongoDB and wait for connection before starting server
+const startServer = async () => {
+  try {
+    await mongoose.connect(MONGO_URI, mongooseOptions);
+    console.log("✅ MongoDB Connected");
+    console.log(`📊 Database: ${mongoose.connection.name}`);
+    console.log(`🌐 Host: ${mongoose.connection.host}`);
+    
+    // Start server only after MongoDB is connected
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      
+      // Initialize scheduler after server starts and DB is connected
+      const schedulerService = require('./src/services/schedulerService');
+      schedulerService.init();
+      schedulerService.start();
+      console.log('📅 Scheduler initialized and started');
+    });
+  } catch (err) {
+    console.error("❌ MongoDB Connection Failed:", err.message);
+    console.error("Full error:", err);
+    
+    // If connection fails, still start server but warn about DB
+    console.warn("⚠️ Starting server without database connection. Some features may not work.");
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT} (without DB)`);
+    });
+  }
+};
+
+// Start the application
+startServer();
+
+// Handle connection events
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err.message);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('⚠️ MongoDB disconnected. Attempting to reconnect...');
+  // Attempt to reconnect after 5 seconds
+  setTimeout(() => {
+    mongoose.connect(MONGO_URI, mongooseOptions)
+      .then(() => console.log("✅ MongoDB reconnected"))
+      .catch((err) => console.error("❌ Reconnection failed:", err.message));
+  }, 5000);
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('✅ MongoDB reconnected successfully');
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await mongoose.connection.close();
+  console.log('MongoDB connection closed through app termination');
+  process.exit(0);
+});
 
 // Middlewares
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
@@ -43,16 +119,7 @@ app.get("/", (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  
-  // Initialize scheduler after server starts
-  const schedulerService = require('./src/services/schedulerService');
-  schedulerService.init();
-  schedulerService.start();
-  console.log('📅 Scheduler initialized and started');
-});
+// Server startup is now handled in startServer() function above
 
 // Generic error handler (ensures JSON error responses)
 // eslint-disable-next-line no-unused-vars

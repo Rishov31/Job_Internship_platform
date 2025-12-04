@@ -19,6 +19,14 @@ class SchedulerService {
     // Schedule daily scraping at 2 AM
     const dailyScrapingJob = cron.schedule('0 2 * * *', async () => {
       try {
+        const mongoose = require('mongoose');
+        
+        // Check if MongoDB is connected before scraping
+        if (mongoose.connection.readyState !== 1) {
+          logger.warn('MongoDB is not connected. Skipping scheduled scraping.');
+          return;
+        }
+
         logger.info('Starting scheduled daily scraping...');
         const results = await scraperService.scrapeAll();
         logger.info('Scheduled scraping completed:', results);
@@ -72,6 +80,14 @@ class SchedulerService {
 
   async runScrapingNow() {
     try {
+      const mongoose = require('mongoose');
+      
+      // Check if MongoDB is connected
+      if (mongoose.connection.readyState !== 1) {
+        logger.error('MongoDB is not connected. Cannot run scraping.');
+        throw new Error('Database not connected. Please ensure MongoDB is running and connection string is correct.');
+      }
+
       logger.info('Manual scraping triggered...');
       const results = await scraperService.scrapeAll();
       logger.info('Manual scraping completed:', results);
@@ -84,6 +100,18 @@ class SchedulerService {
 
   async cleanupExpiredData() {
     try {
+      const mongoose = require('mongoose');
+      
+      // Check if MongoDB is connected
+      if (mongoose.connection.readyState !== 1) {
+        logger.warn('MongoDB is not connected. Skipping cleanup.');
+        return {
+          deletedJobs: 0,
+          deletedInternships: 0,
+          message: 'Database not connected'
+        };
+      }
+
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       
       // Remove expired scraped data older than 30 days

@@ -8,6 +8,7 @@ export default function JobSeekerJobList() {
   const [pagination, setPagination] = useState({});
   const [savedJobs, setSavedJobs] = useState([]);
   const [filters, setFilters] = useState({
+    page: 1,
     search: "",
     location: "",
     salaryMin: "",
@@ -38,6 +39,7 @@ export default function JobSeekerJobList() {
       const params = {
         includeScraped: 'true',
         limit: 20,
+        page: filters.page || 1,
         ...filters
       };
       
@@ -90,7 +92,12 @@ export default function JobSeekerJobList() {
   };
 
   const updateFilter = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+    setFilters(prev => ({ ...prev, [key]: value, page: 1 })); // Reset to page 1 when filters change
+  };
+
+  const handlePageChange = (newPage) => {
+    setFilters(prev => ({ ...prev, page: newPage }));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const getSalaryDisplay = (job) => {
@@ -302,24 +309,13 @@ export default function JobSeekerJobList() {
             </div>
 
             {/* Popular Jobs Section */}
-            <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold">Popular</h2>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 hover:bg-gray-100 rounded-lg">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 rounded-lg">
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+            {jobs.length > 0 && (
+              <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">Popular</h2>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {jobs.slice(0, 4).map((job) => (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {jobs.slice(0, Math.min(4, jobs.length)).map((job) => (
                   <div 
                     key={job._id} 
                     className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
@@ -353,15 +349,22 @@ export default function JobSeekerJobList() {
                     <p className="text-xs text-gray-500 mb-2">{job.location}</p>
                     <p className="text-xs text-gray-400">Applied {Math.floor(Math.random() * 30) + 1} days ago</p>
                   </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Now Hiring Section */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="text-lg font-semibold mb-4">Now Hiring</h2>
-              <div className="space-y-4">
-                {jobs.slice(4).map((job) => (
+              {jobs.length === 0 ? (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 text-lg">No jobs found. Try adjusting your filters.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    {jobs.map((job) => (
                   <div 
                     key={job._id} 
                     className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer"
@@ -423,8 +426,67 @@ export default function JobSeekerJobList() {
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                  
+                  {/* Pagination Controls */}
+                  {pagination.total > 1 && (
+                    <div className="mt-6 pt-6 border-t">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          Showing {((pagination.current - 1) * 20) + 1} to{' '}
+                          {Math.min(pagination.current * 20, pagination.totalJobs)} of{' '}
+                          {pagination.totalJobs} jobs
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handlePageChange(pagination.current - 1)}
+                            disabled={pagination.current === 1}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          >
+                            Previous
+                          </button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: Math.min(5, pagination.total) }, (_, i) => {
+                              let pageNum;
+                              if (pagination.total <= 5) {
+                                pageNum = i + 1;
+                              } else if (pagination.current <= 3) {
+                                pageNum = i + 1;
+                              } else if (pagination.current >= pagination.total - 2) {
+                                pageNum = pagination.total - 4 + i;
+                              } else {
+                                pageNum = pagination.current - 2 + i;
+                              }
+                              
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => handlePageChange(pageNum)}
+                                  className={`px-4 py-2 border rounded-lg text-sm font-medium transition ${
+                                    pagination.current === pageNum
+                                      ? 'bg-blue-600 text-white border-blue-600'
+                                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={() => handlePageChange(pagination.current + 1)}
+                            disabled={pagination.current === pagination.total}
+                            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 

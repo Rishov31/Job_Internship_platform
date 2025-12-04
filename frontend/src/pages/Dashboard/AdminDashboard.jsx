@@ -434,7 +434,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getDashboardStats, getAllUsers, getAllJobs } from "../../api/adminApi";
 import { getAdminResources } from "../../api/resourceApi";
-import { getScrapingStats, triggerScraping, startScheduler, stopScheduler, getSchedulerStatus, cleanupExpiredData } from "../../api/scraperApi";
+import { getScrapingStats, triggerScraping, stopScraping, startScheduler, stopScheduler, getSchedulerStatus, cleanupExpiredData } from "../../api/scraperApi";
 
 // Icons
 const StatsIcon = () => (
@@ -932,6 +932,23 @@ export default function AdminDashboard() {
               className="w-full bg-blue-600 text-white px-4 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
             >
               Trigger Scraping Now
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  if (window.confirm('Are you sure you want to stop the ongoing scraping operation?')) {
+                    await stopScraping();
+                    alert('Scraping stopped successfully!');
+                    await fetchDashboardData();
+                  }
+                } catch (error) {
+                  console.error('Error stopping scraping:', error);
+                  alert('Error stopping scraping: ' + error.message);
+                }
+              }}
+              className="w-full bg-red-600 text-white px-4 py-3 rounded-lg hover:bg-red-700 transition-colors font-semibold"
+            >
+              Stop Scraping
             </button>
             <button
               onClick={async () => {

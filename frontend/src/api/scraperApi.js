@@ -22,6 +22,19 @@ export async function triggerScraping() {
   return res.json();
 }
 
+// Stop ongoing scraping
+export async function stopScraping() {
+  const res = await fetch(`${API_BASE}/scraper/stop`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || "Failed to stop scraping");
+  }
+  return res.json();
+}
+
 // Start scheduler
 export async function startScheduler() {
   const res = await fetch(`${API_BASE}/scraper/scheduler/start`, {

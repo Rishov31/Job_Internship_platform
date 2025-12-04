@@ -11,6 +11,7 @@ router.use(requireRole("admin"));
 // Scraper management routes
 router.get("/stats", scraperController.getScrapingStats);
 router.post("/trigger", scraperController.triggerScraping);
+router.post("/stop", scraperController.stopScraping); // Stop ongoing scraping
 router.post("/scheduler/start", scraperController.startScheduler);
 router.post("/scheduler/stop", scraperController.stopScheduler);
 router.get("/scheduler/status", scraperController.getSchedulerStatus);

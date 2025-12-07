@@ -226,7 +226,7 @@ export default function JobSeekerDashboard() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
-            <span>Explore Companies</span>
+            <span>Mentoring</span>
           </Link>
         </nav>
 
@@ -286,7 +286,7 @@ export default function JobSeekerDashboard() {
                   <circle cx="12" cy="7" r="4"/>
                 </svg>
               </div>
-              <span className="text-sm font-medium">Alina Kimberly</span>
+              <span className="text-sm font-medium">User</span>
             </Link>
           </div>
         </div>
@@ -362,7 +362,7 @@ export default function JobSeekerDashboard() {
                   <div className="flex items-center gap-2 mt-2">
                     <div className="w-8 h-8 bg-gray-300 rounded-full" />
                     <div className="flex-1">
-                      <div className="text-sm font-medium">Alina Russel</div>
+                      <div className="text-sm font-medium">User</div>
                       <div className="text-xs text-gray-500">HR at DigitalOcean</div>
                     </div>
                     <div className="text-xs text-gray-500">10:00 - 11:00</div>

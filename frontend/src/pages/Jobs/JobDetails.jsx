@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getJobById, saveJob, unsaveJob, checkSavedJobs } from "../../api/jobApi";
 
@@ -261,204 +262,213 @@ export default function JobDetails() {
 
           {/* Job Content */}
           <div className="p-8">
-            {/* Skills Required */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Skill(s) required:</h2>
-              <div className="flex flex-wrap gap-2">
-                {job.skills && job.skills.length > 0 ? (
-                  job.skills.map((skill, index) => (
-                    <span 
-                      key={index}
-                      className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium"
-                    >
-                      {skill}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-gray-500 italic">No specific skills mentioned</span>
-                )}
-              </div>
-            </div>
-
-            {/* About the Job */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">About the job:</h2>
-              {job.description ? (
-                <div className="text-gray-700 leading-relaxed whitespace-pre-line">
-                  {job.description.split('\n\n').map((paragraph, index) => (
-                    <p key={index} className="mb-4">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 italic">No job description available</p>
-              )}
-            </div>
-
-            {/* Key Responsibilities */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Key Responsibilities:</h2>
-              {job.keyResponsibilities && job.keyResponsibilities.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.keyResponsibilities.map((responsibility, index) => (
-                    <li key={index} className="text-gray-700">{responsibility}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No specific responsibilities mentioned</p>
-              )}
-            </div>
-
-            {/* Work Environment Requirements */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Work environment requirements:</h2>
-              {job.workEnvironmentRequirements && job.workEnvironmentRequirements.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.workEnvironmentRequirements.map((requirement, index) => (
-                    <li key={index} className="text-gray-700">{requirement}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No specific work environment requirements mentioned</p>
-              )}
-            </div>
-
-            {/* Other Requirements */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Other requirements:</h2>
-              {job.otherRequirements && job.otherRequirements.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.otherRequirements.map((requirement, index) => (
-                    <li key={index} className="text-gray-700">{requirement}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No additional requirements mentioned</p>
-              )}
-            </div>
-
-            {/* Requirements */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Requirement:</h2>
-              {job.requirements && job.requirements.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.requirements.map((requirement, index) => (
-                    <li key={index} className="text-gray-700">{requirement}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No specific requirements mentioned</p>
-              )}
-            </div>
-
-            {/* Education Qualification */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Education qualification:</h2>
-              {job.educationQualifications && job.educationQualifications.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.educationQualifications.map((qualification, index) => (
-                    <li key={index} className="text-gray-700">{qualification}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No specific education requirements mentioned</p>
-              )}
-            </div>
-
-            {/* Why Company */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Why {job.company}?</h2>
-              {job.whyCompany && job.whyCompany.length > 0 ? (
-                <ol className="list-decimal list-inside space-y-2">
-                  {job.whyCompany.map((benefit, index) => (
-                    <li key={index} className="text-gray-700">{benefit}</li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-gray-500 italic">No specific company benefits mentioned</p>
-              )}
-            </div>
-
-            {/* Salary Details */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Salary:</h2>
-              <div className="bg-gray-50 rounded-lg p-6">
-                <div className="mb-4">
-                  <h3 className="font-semibold mb-2">Probation:</h3>
-                  <div className="text-gray-700">
-                    <p>Duration: {job.salary?.probationDuration || '3 months'}</p>
-                    {job.salary?.probationSalaryMin && job.salary?.probationSalaryMax ? (
-                      <p>
-                        Salary during probation: ₹{job.salary.probationSalaryMin.toLocaleString()} - {job.salary.probationSalaryMax.toLocaleString()}/month
-                        {job.isFresher && <span className="text-sm text-gray-500"> (only for freshers)</span>}
-                      </p>
+            {job.isScraped && (job.fullDetailsHtml || job.descriptionHtml) ? (
+              <div
+                className="prose max-w-none text-gray-800"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(job.fullDetailsHtml || job.descriptionHtml) }}
+              />
+            ) : (
+              <>
+                {/* Skills Required */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Skill(s) required:</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {job.skills && job.skills.length > 0 ? (
+                      job.skills.map((skill, index) => (
+                        <span 
+                          key={index}
+                          className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-sm font-medium"
+                        >
+                          {skill}
+                        </span>
+                      ))
                     ) : (
-                      <p className="text-gray-500 italic">Probation salary not specified</p>
+                      <span className="text-gray-500 italic">No specific skills mentioned</span>
                     )}
                   </div>
                 </div>
-                <div className="mb-4">
-                  <h3 className="font-semibold mb-2">After probation:</h3>
-                  {job.salary?.annualCTCMin && job.salary?.annualCTCMax ? (
-                    <p className="text-gray-700">
-                      Annual CTC: ₹{job.salary.annualCTCMin.toLocaleString()} - {job.salary.annualCTCMax.toLocaleString()}/year
-                    </p>
+
+                {/* About the Job */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">About the job:</h2>
+                  {job.description ? (
+                    <div className="text-gray-700 leading-relaxed whitespace-pre-line">
+                      {job.description.split('\n\n').map((paragraph, index) => (
+                        <p key={index} className="mb-4">
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-gray-500 italic">Annual CTC not specified</p>
+                    <p className="text-gray-500 italic">No job description available</p>
                   )}
                 </div>
-                <div className="mt-4">
-                  <p className="text-gray-700">
-                    <strong>Number of openings:</strong> {job.numberOfOpenings || 1}
-                  </p>
-                </div>
-              </div>
-            </div>
 
-            {/* About Company */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">About {job.company}</h2>
-              {job.companyDetails?.description ? (
-                <p className="text-gray-700 leading-relaxed">{job.companyDetails.description}</p>
-              ) : (
-                <p className="text-gray-500 italic">No company description available</p>
-              )}
-            </div>
+                {/* Key Responsibilities */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Key Responsibilities:</h2>
+                  {job.keyResponsibilities && job.keyResponsibilities.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.keyResponsibilities.map((responsibility, index) => (
+                        <li key={index} className="text-gray-700">{responsibility}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No specific responsibilities mentioned</p>
+                  )}
+                </div>
 
-            {/* Activity on Platform */}
-            <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Activity on Platform</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-gray-500">Hiring since</p>
-                    <p className="font-semibold">{job.companyDetails?.hiringSince || 'January 2020'}</p>
+                {/* Work Environment Requirements */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Work environment requirements:</h2>
+                  {job.workEnvironmentRequirements && job.workEnvironmentRequirements.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.workEnvironmentRequirements.map((requirement, index) => (
+                        <li key={index} className="text-gray-700">{requirement}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No specific work environment requirements mentioned</p>
+                  )}
+                </div>
+
+                {/* Other Requirements */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Other requirements:</h2>
+                  {job.otherRequirements && job.otherRequirements.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.otherRequirements.map((requirement, index) => (
+                        <li key={index} className="text-gray-700">{requirement}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No additional requirements mentioned</p>
+                  )}
+                </div>
+
+                {/* Requirements */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Requirement:</h2>
+                  {job.requirements && job.requirements.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.requirements.map((requirement, index) => (
+                        <li key={index} className="text-gray-700">{requirement}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No specific requirements mentioned</p>
+                  )}
+                </div>
+
+                {/* Education Qualification */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Education qualification:</h2>
+                  {job.educationQualifications && job.educationQualifications.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.educationQualifications.map((qualification, index) => (
+                        <li key={index} className="text-gray-700">{qualification}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No specific education requirements mentioned</p>
+                  )}
+                </div>
+
+                {/* Why Company */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Why {job.company}?</h2>
+                  {job.whyCompany && job.whyCompany.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2">
+                      {job.whyCompany.map((benefit, index) => (
+                        <li key={index} className="text-gray-700">{benefit}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No specific company benefits mentioned</p>
+                  )}
+                </div>
+
+                {/* Salary Details */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Salary:</h2>
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <div className="mb-4">
+                      <h3 className="font-semibold mb-2">Probation:</h3>
+                      <div className="text-gray-700">
+                        <p>Duration: {job.salary?.probationDuration || '3 months'}</p>
+                        {job.salary?.probationSalaryMin && job.salary?.probationSalaryMax ? (
+                          <p>
+                            Salary during probation: ₹{job.salary.probationSalaryMin.toLocaleString()} - {job.salary.probationSalaryMax.toLocaleString()}/month
+                            {job.isFresher && <span className="text-sm text-gray-500"> (only for freshers)</span>}
+                          </p>
+                        ) : (
+                          <p className="text-gray-500 italic">Probation salary not specified</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <h3 className="font-semibold mb-2">After probation:</h3>
+                      {job.salary?.annualCTCMin && job.salary?.annualCTCMax ? (
+                        <p className="text-gray-700">
+                          Annual CTC: ₹{job.salary.annualCTCMin.toLocaleString()} - {job.salary.annualCTCMax.toLocaleString()}/year
+                        </p>
+                      ) : (
+                        <p className="text-gray-500 italic">Annual CTC not specified</p>
+                      )}
+                    </div>
+                    <div className="mt-4">
+                      <p className="text-gray-700">
+                        <strong>Number of openings:</strong> {job.numberOfOpenings || 1}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm text-gray-500">Opportunities posted</p>
-                    <p className="font-semibold">{job.companyDetails?.opportunitiesPosted || 0}</p>
+
+                {/* About Company */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">About {job.company}</h2>
+                  {job.companyDetails?.description ? (
+                    <p className="text-gray-700 leading-relaxed">{job.companyDetails.description}</p>
+                  ) : (
+                    <p className="text-gray-500 italic">No company description available</p>
+                  )}
+                </div>
+
+                {/* Activity on Platform */}
+                <div className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4">Activity on Platform</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm text-gray-500">Hiring since</p>
+                        <p className="font-semibold">{job.companyDetails?.hiringSince || 'January 2020'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm text-gray-500">Opportunities posted</p>
+                        <p className="font-semibold">{job.companyDetails?.opportunitiesPosted || 0}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                      <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <div>
+                        <p className="text-sm text-gray-500">Candidates hired</p>
+                        <p className="font-semibold">{job.companyDetails?.candidatesHired || 0}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-                  <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-              <div>
-                    <p className="text-sm text-gray-500">Candidates hired</p>
-                    <p className="font-semibold">{job.companyDetails?.candidatesHired || 0}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* Apply Button Footer */}

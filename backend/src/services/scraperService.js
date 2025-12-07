@@ -138,6 +138,8 @@ class ScraperService {
         company: company,
         location: location,
         description: description.trim(),
+        descriptionHtml: (jobData.descriptionHtml || '').trim(),
+        fullDetailsHtml: (jobData.fullDetailsHtml || '').trim(),
         category: category,
         jobType: 'private',
         status: 'active',
@@ -246,8 +248,18 @@ class ScraperService {
   // Helper function to scrape detailed job information from Internshala job detail page
   async scrapeInternshalaJobDetails(jobUrl, page) {
     try {
-      await page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-      await page.waitForTimeout(2000); // Wait for dynamic content to load
+      await page.goto(jobUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+      await page.waitForSelector('body', { timeout: 15000 });
+      await page.waitForTimeout(2500); // give time for dynamic widgets
+      // Wait until the details content (About the job) appears to ensure it's rendered
+      try {
+        await page.waitForFunction(() => {
+          const nodes = Array.from(document.querySelectorAll('h1, h2, h3, h4'));
+          return nodes.some(h => /about\s+the\s+job/i.test((h.textContent || '').trim()));
+        }, { timeout: 20000 });
+      } catch (e) {
+        // continue even if not found; we'll use fallbacks in evaluation
+      }
       
       const jobDetails = await page.evaluate(() => {
         const getTextContent = (selector) => {
@@ -321,9 +333,31 @@ class ScraperService {
           }
         });
         
+        // Utility: find a section by heading text (case-insensitive contains)
+        const getSectionByHeading = (needle) => {
+          const nodes = Array.from(document.querySelectorAll('h1, h2, h3, h4'));
+          const match = nodes.find(h => (h.textContent || '').toLowerCase().includes(needle.toLowerCase()));
+          if (!match) return null;
+          // climb to a reasonable container wrapping section content
+          let node = match;
+          for (let i = 0; i < 6 && node && node.parentElement; i++) {
+            node = node.parentElement;
+            const headingCount = node.querySelectorAll('h1, h2, h3, h4').length;
+            if (headingCount >= 1 && node.children.length >= 2) {
+              return node;
+            }
+          }
+          return match.parentElement || match;
+        };
+
         // Extract about the job / job description
-        const aboutSection = document.querySelector('.job-description, .about-job, [class*="description"], .job-detail-section');
+        let aboutSection = document.querySelector('.job-description, .about-job, [class*="description"], .job-detail-section');
+        if (!aboutSection) {
+          aboutSection = getSectionByHeading('About the job');
+        }
         let description = '';
+        let descriptionHtml = '';
+        let fullDetailsHtml = '';
         if (aboutSection) {
           // Get all text content from description section
           const paragraphs = aboutSection.querySelectorAll('p, .text-container, div');
@@ -334,6 +368,48 @@ class ScraperService {
           
           if (!description) {
             description = aboutSection.textContent.trim();
+          }
+          // Preserve the full HTML for exact rendering
+          // Clone node to avoid mutating original and remove scripts/styles for safety on backend storage
+          const clone = aboutSection.cloneNode(true);
+          clone.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+          descriptionHtml = clone.innerHTML.trim();
+        }
+
+        // Try to capture the entire details container similar to Internshala's structure
+        // Strategy: prefer a section that contains the heading "About the job" and its sibling sections (skills, who can apply, salary, etc.)
+        const findContainerFromHeading = () => {
+          const container = getSectionByHeading('About the job');
+          if (container) {
+            const clone = container.cloneNode(true);
+            clone.querySelectorAll('script, style, noscript').forEach(n => n.remove());
+            return clone.innerHTML.trim();
+          }
+          return '';
+        };
+
+        fullDetailsHtml = findContainerFromHeading();
+
+        // Fallbacks for overall container if heading-based failed
+        if (!fullDetailsHtml) {
+          const selectors = [
+            '.detail_container',
+            '.job-details',
+            '.internship_details',
+            '.job-details-container',
+            'main .container',
+            'main',
+            '#content',
+            'article'
+          ];
+          for (const sel of selectors) {
+            const container = document.querySelector(sel);
+            if (container) {
+              const dc = container.cloneNode(true);
+              dc.querySelectorAll('header, footer, nav, script, style, noscript').forEach(n => n.remove());
+              const html = dc.innerHTML.trim();
+              if (html && html.length > 200) { fullDetailsHtml = html; break; }
+            }
           }
         }
         
@@ -401,6 +477,8 @@ class ScraperService {
           company,
           location,
           description,
+          descriptionHtml,
+          fullDetailsHtml,
           salaryText,
           salaryMin,
           salaryMax,
@@ -634,6 +712,8 @@ class ScraperService {
             company: (jobData.company || 'Unknown Company').trim(),
             location: (jobData.location || 'Not specified').trim(),
             description: description.trim(),
+            descriptionHtml: (jobData.descriptionHtml || '').trim(),
+            fullDetailsHtml: (jobData.fullDetailsHtml || '').trim(),
             category: 'Technology', // Default category
             jobType: 'private',
             status: 'active',

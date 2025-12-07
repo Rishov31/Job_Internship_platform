@@ -12,6 +12,14 @@ const scrapedJobSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // Full HTML description as scraped from the source site (for exact rendering)
+    descriptionHtml: {
+      type: String,
+    },
+    // Entire details section HTML (multiple sections stitched together for exact rendering)
+    fullDetailsHtml: {
+      type: String,
+    },
     company: {
       type: String,
       required: true,
@@ -153,7 +161,7 @@ const scrapedJobSchema = new mongoose.Schema(
 scrapedJobSchema.index({ source: 1, sourceId: 1 }, { unique: true });
 
 // Index for better search performance
-scrapedJobSchema.index({ title: "text", description: "text", company: "text", skills: "text" });
+scrapedJobSchema.index({ title: "text", description: "text", descriptionHtml: "text", fullDetailsHtml: "text", company: "text", skills: "text" });
 scrapedJobSchema.index({ jobType: 1, category: 1, location: 1 });
 scrapedJobSchema.index({ status: 1, source: 1 });
 scrapedJobSchema.index({ lastScraped: -1 });

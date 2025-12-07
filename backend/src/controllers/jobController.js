@@ -158,6 +158,7 @@ exports.getAllJobs = async (req, res, next) => {
       category,
       location,
       search,
+      keywords, // comma-separated keywords to match inside description/HTML
       status = 'active',
       includeScraped = 'true',
       salaryMin,
@@ -188,6 +189,32 @@ exports.getAllJobs = async (req, res, next) => {
     if (search) {
       filter.$text = { $search: search };
       scrapedFilter.$text = { $search: search };
+    }
+
+    // Keyword filtering across description, descriptionHtml and skills
+    if (keywords) {
+      const list = keywords.split(',').map(k => k.trim()).filter(Boolean);
+      if (list.length > 0) {
+        const andClauses = list.map(kw => ({
+          $or: [
+            { description: new RegExp(kw, 'i') },
+            { skills: new RegExp(kw, 'i') }
+          ]
+        }));
+        const scrapedAndClauses = list.map(kw => ({
+          $or: [
+            { description: new RegExp(kw, 'i') },
+            { descriptionHtml: new RegExp(kw, 'i') },
+            { skills: new RegExp(kw, 'i') }
+          ]
+        }));
+        if (andClauses.length > 0) {
+          filter.$and = (filter.$and || []).concat(andClauses);
+        }
+        if (scrapedAndClauses.length > 0) {
+          scrapedFilter.$and = (scrapedFilter.$and || []).concat(scrapedAndClauses);
+        }
+      }
     }
     if (isRemote !== undefined) {
       filter.isRemote = isRemote === 'true';

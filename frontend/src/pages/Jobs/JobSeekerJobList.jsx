@@ -154,9 +154,9 @@ export default function JobSeekerJobList() {
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">C</span>
+                <span className="text-white font-bold text-sm">H</span>
               </div>
-              <span className="text-xl font-bold text-gray-900">Carimodal</span>
+              <span className="text-xl font-bold text-gray-900">Hire Me</span>
             </div>
             <nav className="hidden md:flex items-center gap-6">
               <Link to="/jobseeker/dashboard" className="text-gray-600 hover:text-gray-900">Portfolio</Link>

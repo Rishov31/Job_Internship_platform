@@ -30,6 +30,7 @@ import ResourceDetails from "./pages/Resources/ResourceDetails";
 
 import MentorDashboard from "./pages/Dashboard/MentorDashboard";
 import MentorshipList from "./pages/Mentorship/MentorshipList";
+import MentorChats from "./pages/Mentorship/MentorChats";
 import Notifications from "./pages/Notifications";
 
 export default function App() {
@@ -66,6 +67,7 @@ export default function App() {
       <Route path="/resources" element={<ResourceList />} />
       <Route path="/resources/:id" element={<ResourceDetails />} />
       <Route path="/jobseeker/mentoring" element={<MentorshipList />} />
+      <Route path="/jobseeker/mentor-chats" element={<MentorChats />} />
 
       {/* Mentor Routes */}
       <Route path="/mentor/dashboard" element={<MentorDashboard />} />

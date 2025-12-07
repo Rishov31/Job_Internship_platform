@@ -228,6 +228,12 @@ export default function JobSeekerDashboard() {
             </svg>
             <span>Mentoring</span>
           </Link>
+          <Link to="/jobseeker/mentor-chats" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Mentor Chats</span>
+          </Link>
         </nav>
 
         <div className="p-4 border-t border-gray-800 space-y-2">

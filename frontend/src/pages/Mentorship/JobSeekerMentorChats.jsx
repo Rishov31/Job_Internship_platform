@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { getMyChatRooms, getMessages, sendMessage } from "../../api/mentorApi";
 import NotificationBell from "../../components/NotificationBell";
 
-export default function MentorChats() {
+export default function JobSeekerMentorChats() {
   const [chatRooms, setChatRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [searchParams] = useSearchParams();
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -38,17 +37,6 @@ export default function MentorChats() {
   }, [selectedRoom]);
 
   useEffect(() => {
-    // Auto-select room from URL params
-    const roomId = searchParams.get("room");
-    if (roomId && chatRooms.length > 0) {
-      const room = chatRooms.find(r => r.mentoringSession?._id === roomId || r._id === roomId);
-      if (room) setSelectedRoom(room);
-    } else if (chatRooms.length > 0 && !selectedRoom) {
-      setSelectedRoom(chatRooms[0]);
-    }
-  }, [chatRooms, searchParams]);
-
-  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
@@ -57,6 +45,9 @@ export default function MentorChats() {
       setLoading(true);
       const data = await getMyChatRooms();
       setChatRooms(data.chatRooms || []);
+      if (data.chatRooms && data.chatRooms.length > 0 && !selectedRoom) {
+        setSelectedRoom(data.chatRooms[0]);
+      }
     } catch (e) {
       console.error("Failed to fetch chat rooms:", e);
     } finally {
@@ -80,7 +71,9 @@ export default function MentorChats() {
     try {
       await sendMessage(selectedRoom._id, newMessage);
       setNewMessage("");
+      // Refresh messages
       await fetchMessages(selectedRoom._id);
+      // Refresh chat rooms to update last message
       await fetchChatRooms();
     } catch (e) {
       alert(e.message || "Failed to send message");
@@ -92,12 +85,12 @@ export default function MentorChats() {
   };
 
   const getOtherUser = (room) => {
-    if (!currentUserId) return room.jobseeker || room.mentor;
-    // If current user is mentor, show jobseeker; otherwise show mentor
-    if (room.mentor?._id === currentUserId || room.mentor === currentUserId) {
-      return room.jobseeker;
+    if (!currentUserId) return room.mentor || room.jobseeker;
+    // If current user is jobseeker, show mentor; otherwise show jobseeker
+    if (room.jobseeker?._id === currentUserId || room.jobseeker === currentUserId) {
+      return room.mentor;
     }
-    return room.mentor;
+    return room.jobseeker;
   };
 
   const formatTime = (dateString) => {
@@ -115,44 +108,15 @@ export default function MentorChats() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      {/* Main Sidebar */}
-      <div className="w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold">Hirefly.</h1>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-2">
-          <Link to="/mentor/dashboard" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg transition">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </svg>
-            <span>Dashboard</span>
-          </Link>
-          <Link to="/mentor/chat" className="flex items-center gap-3 px-4 py-3 bg-blue-600 rounded-lg">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span>Chat</span>
-          </Link>
-          <Link to="/mentor/video-call" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg transition">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-            </svg>
-            <span>Video Call</span>
-          </Link>
-        </nav>
-      </div>
-
       {/* Chat Rooms List - Left Sidebar */}
       <div className="w-80 bg-white border-r flex flex-col">
         <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Chats</h2>
+          <h2 className="text-lg font-semibold">Mentor Chats</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
           {chatRooms.length === 0 ? (
             <div className="p-4 text-center text-gray-500">
-              No chat rooms yet. Sessions will appear here after payment.
+              No chat rooms yet. Book a mentoring session to start chatting.
             </div>
           ) : (
             <div className="divide-y">
@@ -192,9 +156,9 @@ export default function MentorChats() {
                           </div>
                         )}
                       </div>
-                      {(room.unreadCountMentor > 0) && (
+                      {(room.unreadCountJobseeker > 0 || room.unreadCountMentor > 0) && (
                         <div className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
-                          {room.unreadCountMentor}
+                          {room.unreadCountJobseeker || room.unreadCountMentor}
                         </div>
                       )}
                     </div>
@@ -212,40 +176,29 @@ export default function MentorChats() {
           <>
             {/* Chat Header */}
             <div className="bg-white border-b p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
-                    {getOtherUser(selectedRoom)?.avatarUrl ? (
-                      <img 
-                        src={getOtherUser(selectedRoom).avatarUrl} 
-                        alt={getOtherUser(selectedRoom).fullName} 
-                        className="w-full h-full rounded-full object-cover" 
-                      />
-                    ) : (
-                      <span className="text-gray-600 font-medium">
-                        {getOtherUser(selectedRoom)?.fullName?.charAt(0)?.toUpperCase() || "U"}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-medium">{getOtherUser(selectedRoom)?.fullName || "Unknown"}</div>
-                    <div className="text-sm text-gray-500">Jobseeker</div>
-                  </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+                  {getOtherUser(selectedRoom)?.avatarUrl ? (
+                    <img 
+                      src={getOtherUser(selectedRoom).avatarUrl} 
+                      alt={getOtherUser(selectedRoom).fullName} 
+                      className="w-full h-full rounded-full object-cover" 
+                    />
+                  ) : (
+                    <span className="text-gray-600 font-medium">
+                      {getOtherUser(selectedRoom)?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                    </span>
+                  )}
                 </div>
-                <Link
-                  to={`/mentor/video-call?room=${selectedRoom._id}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                  </svg>
-                  <span>Video Call</span>
-                </Link>
+                <div>
+                  <div className="font-medium">{getOtherUser(selectedRoom)?.fullName || "Unknown"}</div>
+                  <div className="text-sm text-gray-500">Mentor</div>
+                </div>
               </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="text-center text-gray-500 mt-8">
                   No messages yet. Start the conversation!
@@ -266,7 +219,7 @@ export default function MentorChats() {
                         className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
                           isMyMessage
                             ? "bg-blue-600 text-white"
-                            : "bg-white text-gray-900 border"
+                            : "bg-gray-200 text-gray-900"
                         }`}
                       >
                         <div className="text-sm">{msg.content}</div>
@@ -308,7 +261,7 @@ export default function MentorChats() {
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center text-gray-500">
               <div className="text-lg mb-2">Select a chat to start messaging</div>
-              <div className="text-sm">Chat rooms will appear after jobseekers book sessions</div>
+              <div className="text-sm">Book a mentoring session to create a chat room</div>
             </div>
           </div>
         )}
@@ -316,3 +269,5 @@ export default function MentorChats() {
     </div>
   );
 }
+
+

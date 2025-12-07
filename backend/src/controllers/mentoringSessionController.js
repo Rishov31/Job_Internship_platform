@@ -105,6 +105,25 @@ exports.getMySessions = async (req, res, next) => {
   }
 };
 
+// Get all sessions for a mentor
+exports.getMySessionsAsMentor = async (req, res, next) => {
+  try {
+    const mentor = await Mentor.findOne({ user: req.user.id });
+    if (!mentor) {
+      return res.json({ sessions: [] });
+    }
+
+    const sessions = await MentoringSession.find({ mentor: mentor._id })
+      .populate("jobseeker", "fullName avatarUrl email phone")
+      .populate("mentorUser", "fullName avatarUrl")
+      .sort({ createdAt: -1 });
+    
+    res.json({ sessions });
+  } catch (e) {
+    next(e);
+  }
+};
+
 // Get a specific session
 exports.getSessionById = async (req, res, next) => {
   try {

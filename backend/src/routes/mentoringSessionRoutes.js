@@ -12,8 +12,11 @@ router.post("/mentor/:mentorId", requireRole("jobseeker"), ctrl.createSession);
 // Update payment status
 router.patch("/:sessionId/payment", requireRole("jobseeker"), ctrl.updatePaymentStatus);
 
-// Get my sessions
+// Get my sessions (jobseeker)
 router.get("/me", requireRole("jobseeker"), ctrl.getMySessions);
+
+// Get my sessions as mentor
+router.get("/me/mentor", requireRole("mentor"), ctrl.getMySessionsAsMentor);
 
 // Get session by ID
 router.get("/:sessionId", requireRole("jobseeker", "mentor"), ctrl.getSessionById);

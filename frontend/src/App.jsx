@@ -31,6 +31,8 @@ import ResourceDetails from "./pages/Resources/ResourceDetails";
 import MentorDashboard from "./pages/Dashboard/MentorDashboard";
 import MentorshipList from "./pages/Mentorship/MentorshipList";
 import MentorChats from "./pages/Mentorship/MentorChats";
+import JobSeekerMentorChats from "./pages/Mentorship/JobSeekerMentorChats";
+import MentorVideoCall from "./pages/Mentorship/MentorVideoCall";
 import Notifications from "./pages/Notifications";
 
 export default function App() {
@@ -67,10 +69,12 @@ export default function App() {
       <Route path="/resources" element={<ResourceList />} />
       <Route path="/resources/:id" element={<ResourceDetails />} />
       <Route path="/jobseeker/mentoring" element={<MentorshipList />} />
-      <Route path="/jobseeker/mentor-chats" element={<MentorChats />} />
+      <Route path="/jobseeker/mentor-chats" element={<JobSeekerMentorChats />} />
 
       {/* Mentor Routes */}
       <Route path="/mentor/dashboard" element={<MentorDashboard />} />
+      <Route path="/mentor/chat" element={<MentorChats />} />
+      <Route path="/mentor/video-call" element={<MentorVideoCall />} />
 
       {/* Notifications Route */}
       <Route path="/notifications" element={<Notifications />} />

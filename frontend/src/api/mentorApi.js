@@ -108,6 +108,15 @@ export async function getMentoringSession(sessionId) {
   return res.json();
 }
 
+export async function getMyMentoringSessionsAsMentor() {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/mentoring-sessions/me/mentor`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error("Failed to fetch mentor sessions");
+  return res.json();
+}
+
 // Chat APIs
 export async function getMyChatRooms() {
   const token = localStorage.getItem("token");

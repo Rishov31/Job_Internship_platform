@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   StreamVideo,
   StreamVideoClient,
-  Call,
-  SpeakerLayout,
+  StreamCall,
+  ParticipantView,
   useCallStateHooks,
 } from '@stream-io/video-react-sdk';
 import '@stream-io/video-react-sdk/dist/css/styles.css';
@@ -57,19 +57,208 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Separate component to use hooks inside Call context
+// Component to render a single participant's video
+function ParticipantVideo({ participant, isLocal = false }) {
+  if (!participant) {
+    return (
+      <div className={`relative ${isLocal ? 'w-64 h-48' : 'w-full h-full'} bg-gray-900 flex items-center justify-center`}>
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div>Loading participant...</div>
+        </div>
+      </div>
+    );
+  }
+  
+  const displayName = participant?.name || participant?.userId || 'User';
+  
+  return (
+    <div className={`relative ${isLocal ? 'w-64 h-48' : 'w-full h-full'} bg-gray-800 rounded-lg overflow-hidden`} style={{ backgroundColor: '#1f2937' }}>
+      <ParticipantView 
+        participant={participant}
+        trackType="videoTrack"
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          objectFit: 'cover',
+          backgroundColor: '#111827'
+        }}
+      />
+      <div className="absolute bottom-2 left-2 px-2 py-1 bg-black/50 rounded text-white text-xs z-10">
+        {displayName}
+      </div>
+    </div>
+  );
+}
+
+// Separate component to use hooks inside StreamCall context
 function CallContent({ call, isMuted, isVideoOff, onToggleMute, onToggleVideo, onLeaveCall }) {
   const { useCallState, useParticipants } = useCallStateHooks();
   const callState = useCallState();
-  const participants = useParticipants();
+  const allParticipants = useParticipants();
   
-  // Render SpeakerLayout - it will show local video even if no remote participants yet
+  // Get local participant from call object directly - most reliable method
+  const localParticipantFromCall = call?.localParticipant?.();
+  
+  // Get current user ID from call state or call object
+  const currentUserId = callState?.localParticipant?.userId || 
+                        callState?.currentUserId || 
+                        localParticipantFromCall?.userId;
+  
+  // Identify local participant - try multiple methods
+  let localParticipant = null;
+  
+  // Method 1: Use call.localParticipant() directly - most reliable
+  if (localParticipantFromCall) {
+    localParticipant = allParticipants.find(p => {
+      // Match by sessionId first (most reliable)
+      if (p.sessionId === localParticipantFromCall.sessionId) return true;
+      // Fallback to userId
+      if (p.userId === localParticipantFromCall.userId) return true;
+      return false;
+    });
+  }
+  
+  // Method 2: Check if participant has isLocalSessionId property
+  if (!localParticipant) {
+    localParticipant = allParticipants.find(p => p.isLocalSessionId === true);
+  }
+  
+  // Method 3: Compare with callState.localParticipant
+  if (!localParticipant && callState?.localParticipant) {
+    localParticipant = allParticipants.find(p => 
+      p.sessionId === callState.localParticipant.sessionId ||
+      p.userId === callState.localParticipant.userId
+    );
+  }
+  
+  // Method 4: Match by current user ID (last resort)
+  if (!localParticipant && currentUserId) {
+    localParticipant = allParticipants.find(p => p.userId === currentUserId);
+  }
+  
+  // Get remote participants - exclude local participant
+  const remoteParticipants = allParticipants.filter(p => {
+    if (!localParticipant) {
+      // If we can't find local, exclude by userId if we have it
+      return currentUserId ? p.userId !== currentUserId : true;
+    }
+    // Exclude local participant by sessionId, userId, and isLocalSessionId
+    const isLocal = p.sessionId === localParticipant.sessionId || 
+                    p.userId === localParticipant.userId ||
+                    p.isLocalSessionId === true;
+    return !isLocal;
+  });
+  
+  // Get the first remote participant (mentor or jobseeker)
+  const remoteParticipant = remoteParticipants[0];
+  
+  // Ensure we have both participants when there are 2 in the call
+  const hasTwoParticipants = allParticipants.length === 2;
+  
+  // Determine main and thumbnail participants
+  let finalMainParticipant = null;
+  let finalThumbnailParticipant = null;
+  
+  if (hasTwoParticipants) {
+    // If we have 2 participants, ensure we show both
+    if (localParticipant && remoteParticipant) {
+      // Perfect case: we identified both
+      finalMainParticipant = remoteParticipant;
+      finalThumbnailParticipant = localParticipant;
+    } else if (localParticipant) {
+      // We found local, the other one must be remote
+      finalThumbnailParticipant = localParticipant;
+      finalMainParticipant = allParticipants.find(p => 
+        p.sessionId !== localParticipant.sessionId &&
+        p.userId !== localParticipant.userId
+      );
+    } else if (remoteParticipant) {
+      // We found remote, the other one must be local
+      finalMainParticipant = remoteParticipant;
+      finalThumbnailParticipant = allParticipants.find(p => 
+        p.sessionId !== remoteParticipant.sessionId &&
+        p.userId !== remoteParticipant.userId
+      );
+    } else {
+      // Can't identify either, but we have 2 participants
+      // Use the one that doesn't match currentUserId as main, other as thumbnail
+      if (currentUserId) {
+        finalMainParticipant = allParticipants.find(p => p.userId !== currentUserId) || allParticipants[1];
+        finalThumbnailParticipant = allParticipants.find(p => p.userId === currentUserId) || allParticipants[0];
+      } else {
+        // No currentUserId, just show second as main, first as thumbnail
+        finalMainParticipant = allParticipants[1];
+        finalThumbnailParticipant = allParticipants[0];
+      }
+    }
+  } else if (allParticipants.length === 1) {
+    // Only one participant (waiting for the other)
+    finalMainParticipant = allParticipants[0];
+    finalThumbnailParticipant = null;
+  } else if (remoteParticipant) {
+    // We have remote but not necessarily 2 participants
+    finalMainParticipant = remoteParticipant;
+    finalThumbnailParticipant = localParticipant;
+  } else if (localParticipant) {
+    // Only local participant
+    finalMainParticipant = localParticipant;
+    finalThumbnailParticipant = null;
+  }
+  
+  // Ensure main and thumbnail are different
+  if (finalMainParticipant && finalThumbnailParticipant && 
+      finalMainParticipant.sessionId === finalThumbnailParticipant.sessionId) {
+    // They're the same, swap them or find the other one
+    if (hasTwoParticipants) {
+      const other = allParticipants.find(p => 
+        p.sessionId !== finalMainParticipant.sessionId
+      );
+      if (other) {
+        finalThumbnailParticipant = other;
+      }
+    }
+  }
+  
+  // Determine which participant to show as thumbnail (local participant)
+  const thumbnailToShow = finalThumbnailParticipant || localParticipant;
+  
+  // Show thumbnail if:
+  // 1. We have a thumbnail participant to show AND
+  // 2. We have a main participant AND
+  // 3. They are different (or we have 2+ participants total)
+  const shouldShowThumbnail = thumbnailToShow && 
+                              finalMainParticipant &&
+                              (thumbnailToShow.sessionId !== finalMainParticipant.sessionId || 
+                               hasTwoParticipants ||
+                               allParticipants.length >= 2);
+  
   return (
     <>
       <div className="w-full h-full" style={{ position: 'relative', height: '100%', minHeight: '100%', backgroundColor: '#111827', overflow: 'hidden' }}>
-        <div style={{ width: '100%', height: '100%' }}>
-          <SpeakerLayout participantsBarPosition="bottom" />
+        {/* Main video area - shows remote participant (other person) */}
+        <div className="absolute inset-0" style={{ width: '100%', height: '100%' }}>
+          {finalMainParticipant ? (
+            <ParticipantVideo participant={finalMainParticipant} isLocal={false} />
+          ) : allParticipants.length > 0 ? (
+            <ParticipantVideo participant={allParticipants[0]} isLocal={false} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gray-900">
+              <div className="text-white text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+                <div>Waiting for participant...</div>
+              </div>
+            </div>
+          )}
         </div>
+        
+        {/* Local video thumbnail - bottom right corner */}
+        {/* Show thumbnail when we have local participant identified and main participant exists */}
+        {shouldShowThumbnail && thumbnailToShow && (
+          <div className="absolute bottom-20 right-4 z-40 shadow-lg rounded-lg overflow-hidden" style={{ width: '256px', height: '192px', border: '2px solid rgba(255,255,255,0.2)' }}>
+            <ParticipantVideo participant={thumbnailToShow} isLocal={true} />
+          </div>
+        )}
       </div>
       
       {/* Custom Call Controls */}
@@ -205,17 +394,26 @@ export default function VideoCall({ roomId, onCallEnd, currentUserId, otherUser 
         ring: false,
       });
       
+      // Wait a bit for call to be fully initialized
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
       // Enable camera and microphone after joining
       try {
         await streamCall.camera.enable();
+        setIsVideoOff(false);
+        console.log('Camera enabled successfully');
       } catch (camErr) {
         console.warn('Could not enable camera:', camErr);
+        setIsVideoOff(true);
       }
       
       try {
         await streamCall.microphone.enable();
+        setIsMuted(false);
+        console.log('Microphone enabled successfully');
       } catch (micErr) {
         console.warn('Could not enable microphone:', micErr);
+        setIsMuted(true);
       }
       
       setCall(streamCall);
@@ -246,8 +444,9 @@ export default function VideoCall({ roomId, onCallEnd, currentUserId, otherUser 
   const toggleMute = async () => {
     if (call) {
       try {
+        const isCurrentlyMuted = call.microphone.state.status === 'enabled' ? false : true;
         await call.microphone.toggle();
-        setIsMuted(prev => !prev);
+        setIsMuted(!isCurrentlyMuted);
       } catch (err) {
         console.error('Error toggling microphone:', err);
       }
@@ -257,8 +456,9 @@ export default function VideoCall({ roomId, onCallEnd, currentUserId, otherUser 
   const toggleVideo = async () => {
     if (call) {
       try {
+        const isCurrentlyOff = call.camera.state.status === 'enabled' ? false : true;
         await call.camera.toggle();
-        setIsVideoOff(prev => !prev);
+        setIsVideoOff(!isCurrentlyOff);
       } catch (err) {
         console.error('Error toggling camera:', err);
       }
@@ -318,9 +518,9 @@ export default function VideoCall({ roomId, onCallEnd, currentUserId, otherUser 
 
   return (
     <StreamVideo client={client}>
-      <div className="relative w-full h-full bg-gray-900" style={{ minHeight: '100%', height: '100%', position: 'relative' }}>
-        <ErrorBoundary onError={(errorMsg) => setError(errorMsg)}>
-          <Call call={call}>
+      <StreamCall call={call}>
+        <div className="relative w-full h-full bg-gray-900" style={{ minHeight: '100%', height: '100%', position: 'relative' }}>
+          <ErrorBoundary onError={(errorMsg) => setError(errorMsg)}>
             <CallContent 
               call={call}
               isMuted={isMuted}
@@ -329,9 +529,9 @@ export default function VideoCall({ roomId, onCallEnd, currentUserId, otherUser 
               onToggleVideo={toggleVideo}
               onLeaveCall={handleLeaveCall}
             />
-          </Call>
-        </ErrorBoundary>
-      </div>
+          </ErrorBoundary>
+        </div>
+      </StreamCall>
     </StreamVideo>
   );
 }

@@ -153,7 +153,7 @@
 
 
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getAllResources } from "../../api/resourceApi";
 import NotificationBell from "../../components/NotificationBell";
 
@@ -162,6 +162,7 @@ export default function JobSeekerDashboard() {
   const [recent, setRecent] = useState([]);
   const [stats, setStats] = useState({ total: 0, pending: 0, shortlisted: 0, interview: 0 });
   const [resources, setResources] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -195,6 +196,17 @@ export default function JobSeekerDashboard() {
     }).catch(()=> setResources([]));
   }, []);
 
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("user");
+    } catch (e) {
+      // ignore storage errors
+    }
+    navigate("/login");
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
@@ -217,7 +229,6 @@ export default function JobSeekerDashboard() {
               <polyline points="14 2 14 8 20 8"/>
               <line x1="16" y1="13" x2="8" y2="13"/>
               <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
             </svg>
             <span>My Application</span>
           </Link>
@@ -239,6 +250,12 @@ export default function JobSeekerDashboard() {
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
             <span>Mentoring</span>
+          </Link>
+          <Link to="/jobseeker/mentor-chats" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 rounded-lg transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>Mentor Chats</span>
           </Link>
         </nav>
 
@@ -291,15 +308,12 @@ export default function JobSeekerDashboard() {
           </div>
           <div className="flex items-center gap-4">
             <NotificationBell />
-            <Link to="/jobseeker/profile" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              <span className="text-sm font-medium">User</span>
-            </Link>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-100"
+            >
+              <span>Logout</span>
+            </button>
           </div>
         </div>
 
@@ -308,16 +322,7 @@ export default function JobSeekerDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-500 text-sm">Take a look at your monthly job search application.</p>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 border rounded-lg text-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                <line x1="16" y1="2" x2="16" y2="6"/>
-                <line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              <span>This Month</span>
+              <p className="text-gray-500 text-sm">Take a look at your job search application.</p>
             </div>
           </div>
 

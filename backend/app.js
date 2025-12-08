@@ -107,8 +107,11 @@ app.use("/api/applications", require("./src/routes/applicationRoutes"));
 app.use("/api/admin", require("./src/routes/adminRoutes"));
 app.use("/api/resources", require("./src/routes/resourceRoutes"));
 app.use("/api/cloudinary", require("./src/routes/cloudinaryRoutes"));
+app.use("/api/stream", require("./src/routes/streamRoutes"));
 app.use("/api/mentors", require("./src/routes/mentorRoutes"));
 app.use("/api/bookings", require("./src/routes/bookingRoutes"));
+app.use("/api/mentoring-sessions", require("./src/routes/mentoringSessionRoutes"));
+app.use("/api/chat", require("./src/routes/chatRoutes"));
 app.use("/api/scraper", require("./src/routes/scraperRoutes"));
 app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 

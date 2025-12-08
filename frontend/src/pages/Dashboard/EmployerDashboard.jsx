@@ -10,265 +10,8 @@
 //     activeJobs: 0,
 //     pausedJobs: 0,
 //     closedJobs: 0,
-//     totalApplications: 0,
-//   });
-//   const [recentJobs, setRecentJobs] = useState([]);
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     const fetchData = async () => {
-//       try {
-//         const [userData, statsData, jobsData] = await Promise.all([
-//           me(),
-//           getJobStats(),
-//           getEmployerJobs({ limit: 5 }),
-//         ]);
-        
-//         setUser(userData);
-//         setStats(statsData);
-//         setRecentJobs(jobsData.jobs);
-//       } catch (error) {
-//         console.error("Failed to fetch dashboard data:", error);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     fetchData();
-//   }, []);
-
-//   if (loading) {
-//     return (
-//       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-//         <div className="relative">
-//           <div className="w-16 h-16 border-4 border-transparent border-t-blue-500 border-r-purple-500 rounded-full animate-spin"></div>
-//           <div className="absolute top-2 left-2 w-12 h-12 border-4 border-transparent border-t-purple-400 border-l-blue-400 rounded-full animate-spin" style={{animationDirection: 'reverse', animationDuration: '1.5s'}}></div>
-//         </div>
-//       </div>
-//     );
-//   }
-
-//   const statCards = [
-//     {
-//       title: "Total Jobs",
-//       value: stats.totalJobs,
-//       color: "from-blue-500 to-blue-600",
-//       bgColor: "from-blue-50/50 to-blue-100/30",
-//       icon: "📋",
-//     },
-//     {
-//       title: "Active Jobs",
-//       value: stats.activeJobs,
-//       color: "from-emerald-500 to-emerald-600",
-//       bgColor: "from-emerald-50/50 to-emerald-100/30",
-//       icon: "✅",
-//     },
-//     {
-//       title: "Applications",
-//       value: stats.totalApplications,
-//       color: "from-purple-500 to-purple-600",
-//       bgColor: "from-purple-50/50 to-purple-100/30",
-//       icon: "📄",
-//     },
-//     {
-//       title: "Paused Jobs",
-//       value: stats.pausedJobs,
-//       color: "from-amber-500 to-amber-600",
-//       bgColor: "from-amber-50/50 to-amber-100/30",
-//       icon: "⏸️",
-//     },
-//   ];
-
-//   return (
-//     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-//       {/* Header */}
-//       <header className="bg-white/80 backdrop-blur-xl shadow-sm border-b border-white/20 sticky top-0 z-50">
-//         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-//           <div className="flex items-center justify-between h-16">
-//             <div className="flex items-center gap-4">
-//               <span className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-//                 HireMe
-//               </span>
-//               <div className="w-px h-6 bg-gradient-to-b from-gray-300 to-gray-400"></div>
-//               <span className="text-gray-700 font-semibold">Employer Dashboard</span>
-//             </div>
-//             <div className="flex items-center gap-4">
-//               <span className="hidden sm:block text-sm text-gray-600">
-//                 Welcome, <span className="font-semibold text-gray-800">{user?.fullName}</span>
-//               </span>
-//               <button className="px-5 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 text-sm font-medium transition-all duration-300 shadow-lg shadow-red-200/40 hover:shadow-red-300/60 transform hover:scale-105">
-//                 Logout
-//               </button>
-//             </div>
-//           </div>
-//         </div>
-//       </header>
-
-//       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-//         {/* Welcome Section */}
-//         <div className="mb-8">
-//           <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent mb-2">
-//             Welcome back, {user?.fullName}!
-//           </h1>
-//           <p className="text-gray-600 text-lg">Manage your job postings and track applications</p>
-//         </div>
-
-//         {/* Quick Actions */}
-//         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-//           <Link
-//             to="/employer/post-job"
-//             className="group relative bg-gradient-to-br from-blue-500 to-blue-600 text-white p-8 rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 shadow-xl shadow-blue-200/50 hover:shadow-blue-300/70 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
-//           >
-//             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-//             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-//             <div className="relative flex items-center gap-4">
-//               <div className="text-3xl group-hover:scale-110 transition-transform duration-300">➕</div>
-//               <div>
-//                 <h3 className="font-bold text-lg">Post New Job</h3>
-//                 <p className="text-sm opacity-90">Create a new job posting</p>
-//               </div>
-//             </div>
-//           </Link>
-
-//           <Link
-//             to="/employer/profile"
-//             className="group relative bg-gradient-to-br from-emerald-500 to-emerald-600 text-white p-8 rounded-2xl hover:from-emerald-600 hover:to-emerald-700 transition-all duration-300 shadow-xl shadow-emerald-200/50 hover:shadow-emerald-300/70 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
-//           >
-//             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-//             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-//             <div className="relative flex items-center gap-4">
-//               <div className="text-3xl group-hover:scale-110 transition-transform duration-300">👤</div>
-//               <div>
-//                 <h3 className="font-bold text-lg">Complete Profile</h3>
-//                 <p className="text-sm opacity-90">Update your company profile</p>
-//               </div>
-//             </div>
-//           </Link>
-
-//           <Link
-//             to="/employer/jobs"
-//             className="group relative bg-gradient-to-br from-purple-500 to-purple-600 text-white p-8 rounded-2xl hover:from-purple-600 hover:to-purple-700 transition-all duration-300 shadow-xl shadow-purple-200/50 hover:shadow-purple-300/70 transform hover:scale-105 hover:-translate-y-1 overflow-hidden"
-//           >
-//             <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-//             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16"></div>
-//             <div className="relative flex items-center gap-4">
-//               <div className="text-3xl group-hover:scale-110 transition-transform duration-300">📋</div>
-//               <div>
-//                 <h3 className="font-bold text-lg">Manage Jobs</h3>
-//                 <p className="text-sm opacity-90">View and edit your jobs</p>
-//               </div>
-//             </div>
-//           </Link>
-//         </div>
-
-//         {/* Stats Cards */}
-//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-//           {statCards.map((stat, index) => (
-//             <div
-//               key={index}
-//               className="group relative bg-white/70 backdrop-blur-sm p-6 rounded-2xl border border-white/30 hover:bg-white/90 transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 hover:-translate-y-1"
-//             >
-//               <div className={`absolute inset-0 bg-gradient-to-br ${stat.bgColor} opacity-0 group-hover:opacity-100 rounded-2xl transition-opacity duration-300`}></div>
-//               <div className="relative flex items-center justify-between">
-//                 <div>
-//                   <p className="text-sm font-semibold text-gray-600 mb-1">{stat.title}</p>
-//                   <p className="text-3xl font-bold text-gray-900 group-hover:scale-110 transition-transform duration-300">
-//                     {stat.value}
-//                   </p>
-//                 </div>
-//                 <div className={`bg-gradient-to-br ${stat.color} p-4 rounded-xl text-white text-2xl shadow-lg group-hover:scale-110 group-hover:rotate-3 transition-all duration-300`}>
-//                   {stat.icon}
-//                 </div>
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-
-//         {/* Recent Jobs */}
-//         <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/30 shadow-xl overflow-hidden">
-//           <div className="px-8 py-6 bg-gradient-to-r from-gray-50/50 to-blue-50/30 border-b border-gray-100/50">
-//             <div className="flex items-center justify-between">
-//               <h2 className="text-2xl font-bold text-gray-900">Recent Jobs</h2>
-//               <Link
-//                 to="/employer/jobs"
-//                 className="group text-blue-600 hover:text-blue-700 text-sm font-semibold flex items-center gap-2 px-4 py-2 rounded-xl hover:bg-blue-50 transition-all duration-200"
-//               >
-//                 View All
-//                 <span className="transform group-hover:translate-x-1 transition-transform duration-200">→</span>
-//               </Link>
-//             </div>
-//           </div>
-          
-//           <div className="divide-y divide-gray-100/50">
-//             {recentJobs.length === 0 ? (
-//               <div className="px-8 py-12 text-center">
-//                 <div className="text-6xl text-gray-300 mb-6">📋</div>
-//                 <h3 className="text-xl font-bold text-gray-900 mb-3">No jobs posted yet</h3>
-//                 <p className="text-gray-600 mb-6 max-w-md mx-auto">Start by posting your first job to attract candidates</p>
-//                 <Link
-//                   to="/employer/post-job"
-//                   className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 font-semibold shadow-xl shadow-blue-200/50 hover:shadow-blue-300/70 transform hover:scale-105 transition-all duration-300"
-//                 >
-//                   Post Your First Job
-//                 </Link>
-//               </div>
-//             ) : (
-//               recentJobs.map((job) => (
-//                 <div 
-//                   key={job._id} 
-//                   className="px-8 py-6 hover:bg-gradient-to-r hover:from-blue-50/30 hover:to-purple-50/20 transition-all duration-300 group"
-//                 >
-//                   <div className="flex items-center justify-between">
-//                     <div className="flex-1">
-//                       <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-900 transition-colors duration-200 mb-1">
-//                         {job.title}
-//                       </h3>
-//                       <p className="text-sm text-gray-600 mb-3">{job.company} • {job.location}</p>
-//                       <div className="flex items-center gap-4">
-//                         <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-//                           job.status === 'active' 
-//                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-//                             : job.status === 'paused' 
-//                             ? 'bg-amber-100 text-amber-800 border border-amber-200' 
-//                             : 'bg-red-100 text-red-800 border border-red-200'
-//                         }`}>
-//                           {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-//                         </span>
-//                         <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-//                           {job.applicationsCount} applications
-//                         </span>
-//                         <span className="text-xs text-gray-500">
-//                           Posted {new Date(job.createdAt).toLocaleDateString()}
-//                         </span>
-//                       </div>
-//                     </div>
-//                     <div className="flex items-center gap-3">
-//                       <Link
-//                         to={`/employer/jobs/${job._id}/edit`}
-//                         className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 hover:text-gray-900 transition-all duration-200 font-medium"
-//                       >
-//                         Edit
-//                       </Link>
-//                       <Link
-//                         to={`/jobs/${job._id}`}
-//                         className="px-4 py-2 text-sm bg-gradient-to-r from-blue-100 to-blue-200 text-blue-700 rounded-xl hover:from-blue-200 hover:to-blue-300 hover:text-blue-900 transition-all duration-200 font-medium"
-//                       >
-//                         View
-//                       </Link>
-//                     </div>
-//                   </div>
-//                 </div>
-//               ))
-//             )}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { getJobStats, getEmployerJobs, updateJobStatus } from "../../api/jobApi";
 import { me } from "../../api/authApi";
 import NotificationBell from "../../components/NotificationBell";
@@ -284,6 +27,7 @@ export default function EmployerDashboard() {
   });
   const [recentJobs, setRecentJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const handleStatusChange = async (jobId, newStatus) => {
     try {
@@ -304,6 +48,17 @@ export default function EmployerDashboard() {
       console.error("Failed to update job status:", error);
       alert("Failed to update job status. Please try again.");
     }
+  };
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("user");
+    } catch (e) {
+      // ignore
+    }
+    navigate("/login");
   };
 
   useEffect(() => {
@@ -425,7 +180,10 @@ export default function EmployerDashboard() {
                   {user?.fullName?.charAt(0)}
                 </div>
               </div>
-              <button className="group px-6 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-2xl hover:from-red-600 hover:to-pink-700 font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105">
+              <button
+                onClick={handleLogout}
+                className="group px-6 py-3 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-2xl hover:from-red-600 hover:to-pink-700 font-semibold transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
                 <span className="flex items-center gap-2">
                   Logout
                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAllJobs, saveJob, unsaveJob, checkSavedJobs } from "../../api/jobApi";
+import SearchableDropdown from "../../components/SearchableDropdown";
 
 export default function JobSeekerJobList() {
   const [jobs, setJobs] = useState([]);
@@ -10,22 +11,83 @@ export default function JobSeekerJobList() {
   const [filters, setFilters] = useState({
     page: 1,
     search: "",
+    profile: "",
     location: "",
-    salaryMin: "",
-    salaryMax: "",
-    isRemote: false,
-    isUrgent: false,
-    isFullTime: true,
-    experience: [],
-    skills: [],
+    salaryLakhs: 0,
+    experienceYears: "",
+    jobsInMyCity: false,
+    workFromHome: false,
+    partTime: false,
     sortBy: "date",
     sortOrder: "desc"
   });
+  
   const navigate = useNavigate();
+  const searchTimeoutRef = useRef(null);
+  
+  // Comprehensive list of profiles/categories (100+ options like Internshala)
+  const profileOptions = [
+    ".NET Development", "3D Printing", "AI Agent Development", "ASP.NET Development", 
+    "Accounts", "Acting", "Aerospace Engineering", "Agriculture & Food Engineering",
+    "Android App Development", "Angular.js", "Animation", "Anthropology", "Applied Sciences",
+    "Architecture", "Artificial Intelligence", "Arts", "Backend Development", "Banking",
+    "Big Data", "Bioinformatics", "Biotechnology", "Blockchain", "Blogging", "Brand Management",
+    "Business Analytics", "Business Development", "C Programming", "C++ Programming", "CAD Design",
+    "Chemical Engineering", "Chemistry", "Civil Engineering", "Cloud Computing", "Computer Science",
+    "Content Writing", "Copywriting", "Corporate Law", "Customer Service", "Cybersecurity",
+    "Data Analytics", "Data Science", "Database Management", "Deep Learning", "Digital Marketing",
+    "E-commerce", "Economics", "Electrical Engineering", "Electronics", "Embedded Systems",
+    "English Proficiency", "Event Management", "Fashion Design", "Finance", "Financial Modeling",
+    "Flutter Development", "Frontend Development", "Full Stack Development", "Game Development",
+    "Graphic Design", "HR Management", "Human Resources", "Industrial Design", "Information Technology",
+    "Interior Design", "Investment Banking", "iOS App Development", "Java Development",
+    "JavaScript", "Journalism", "Law", "Machine Learning", "Marketing", "Mechanical Engineering",
+    "Media & Communication", "Mobile App Development", "Music", "Network Administration",
+    "Node.js Development", "Operations", "Photography", "PHP Development", "Product Design",
+    "Product Management", "Project Management", "Python Development", "Quality Assurance",
+    "React.js Development", "Research", "Sales", "Search Engine Optimization (SEO)",
+    "Social Media Marketing", "Software Development", "Software Testing", "Statistics",
+    "Supply Chain Management", "System Administration", "Teaching", "UI/UX Design",
+    "Video Editing", "Web Development", "Web Design", "WordPress Development"
+  ];
+  
+  // Comprehensive list of Indian cities/locations
+  const locationOptions = [
+    "Ahmedabad", "Bangalore", "Bhopal", "Chandigarh", "Chennai", "Coimbatore", "Delhi",
+    "Faridabad", "Ghaziabad", "Gurgaon", "Guwahati", "Hyderabad", "Indore", "Jaipur",
+    "Kanpur", "Kochi", "Kolkata", "Lucknow", "Ludhiana", "Mumbai", "Nagpur", "Noida",
+    "Patna", "Pune", "Raipur", "Rajkot", "Ranchi", "Surat", "Thane", "Vadodara",
+    "Visakhapatnam", "Agra", "Allahabad", "Amritsar", "Aurangabad", "Bareilly", "Belgaum",
+    "Bhubaneswar", "Bikaner", "Bilaspur", "Bokaro", "Calicut", "Dehradun", "Dhanbad",
+    "Durgapur", "Gandhinagar", "Gaya", "Gorakhpur", "Guntur", "Hubli", "Jabalpur",
+    "Jalandhar", "Jamshedpur", "Jodhpur", "Kakinada", "Karnal", "Kolhapur", "Kota",
+    "Kottayam", "Kozhikode", "Madurai", "Mangalore", "Meerut", "Moradabad", "Mysore",
+    "Nashik", "Nellore", "Panaji", "Pondicherry", "Puri", "Raipur", "Rajahmundry",
+    "Salem", "Sangli", "Shimla", "Siliguri", "Srinagar", "Thiruvananthapuram", "Tiruchirappalli",
+    "Tirunelveli", "Udaipur", "Varanasi", "Vellore", "Vijayawada", "Warangal"
+  ];
 
   useEffect(() => {
-    loadJobs();
-  }, [filters]);
+    // Clear any existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // For search field, debounce to avoid too many API calls while typing
+    // For other filters (profile, location, etc.), trigger immediately
+    const shouldDebounce = filters.search && filters.search.length > 0;
+    const delay = shouldDebounce ? 800 : 0;
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      loadJobs();
+    }, delay);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [filters.search, filters.profile, filters.location, filters.salaryLakhs, filters.experienceYears, filters.workFromHome, filters.jobsInMyCity, filters.partTime, filters.page]);
 
   useEffect(() => {
     if (jobs.length > 0) {
@@ -40,17 +102,55 @@ export default function JobSeekerJobList() {
         includeScraped: 'true',
         limit: 20,
         page: filters.page || 1,
-        ...filters
       };
       
-      // Clean up empty filters
-      Object.keys(params).forEach(key => {
-        if (params[key] === "" || (Array.isArray(params[key]) && params[key].length === 0)) {
-          delete params[key];
-        }
-      });
+      // Add search if provided
+      if (filters.search) {
+        params.search = filters.search;
+      }
+      
+      // Add profile filter
+      if (filters.profile) {
+        params.profile = filters.profile;
+      }
+      
+      // Add location filter
+      if (filters.location) {
+        params.location = filters.location;
+      }
+      
+      // Add salary filter (in lakhs)
+      if (filters.salaryLakhs && filters.salaryLakhs > 0) {
+        params.salaryLakhs = filters.salaryLakhs;
+      }
+      
+      // Add experience filter
+      if (filters.experienceYears) {
+        params.experience = filters.experienceYears;
+      }
+      
+      // Add job type filters
+      if (filters.workFromHome) {
+        params.isRemote = 'true';
+      }
+      
+      if (filters.jobsInMyCity && filters.location) {
+        // Jobs in my city is essentially location-based filtering
+        // Already handled by location filter
+      }
+      
+      // Add sorting
+      if (filters.sortBy) {
+        params.sortBy = filters.sortBy;
+        params.sortOrder = filters.sortOrder || 'desc';
+      }
 
+      // Debug: Log the params being sent
+      console.log('Loading jobs with params:', params);
+      
       const data = await getAllJobs(params);
+      console.log('Received jobs:', data.jobs?.length || 0, 'jobs');
+      
       setJobs(data.jobs || []);
       setPagination(data.pagination || {});
     } catch (error) {
@@ -93,6 +193,14 @@ export default function JobSeekerJobList() {
 
   const updateFilter = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value, page: 1 })); // Reset to page 1 when filters change
+  };
+  
+  const handleProfileSelect = (profile) => {
+    updateFilter('profile', profile);
+  };
+  
+  const handleLocationSelect = (location) => {
+    updateFilter('location', location);
   };
 
   const handlePageChange = (newPage) => {
@@ -175,103 +283,165 @@ export default function JobSeekerJobList() {
           {/* Left Sidebar - Filters */}
           <div className="lg:col-span-3">
             <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h3 className="text-lg font-semibold mb-6">Filter</h3>
+              <h3 className="text-lg font-semibold mb-6">Filters</h3>
               
-              {/* Salary Range */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Salary</label>
+              {/* Profile - Searchable Dropdown */}
+              <div className="mb-4">
+                <SearchableDropdown
+                  label="Profile"
+                  options={profileOptions}
+                  value={filters.profile}
+                  onSelect={handleProfileSelect}
+                  placeholder="e.g. Marketing"
+                />
+              </div>
+
+              {/* Location - Searchable Dropdown */}
+              <div className="mb-4">
+                <SearchableDropdown
+                  label="Location"
+                  options={locationOptions}
+                  value={filters.location}
+                  onSelect={handleLocationSelect}
+                  placeholder="e.g. Delhi"
+                />
+              </div>
+
+              {/* Job Type Checkboxes */}
+              <div className="mb-4">
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={filters.jobsInMyCity}
+                      onChange={(e) => updateFilter('jobsInMyCity', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Jobs in my city</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={filters.workFromHome}
+                      onChange={(e) => updateFilter('workFromHome', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Work from home</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={filters.partTime}
+                      onChange={(e) => updateFilter('partTime', e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Part-time</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Annual Salary Slider */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Annual salary (in lakhs)
+                </label>
                 <div className="relative">
                   <input
                     type="range"
-                    min="300"
-                    max="5000"
-                    value={filters.salaryMax || 4600}
-                    onChange={(e) => updateFilter('salaryMax', e.target.value)}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    min="0"
+                    max="10"
+                    step="1"
+                    value={filters.salaryLakhs || 0}
+                    onChange={(e) => updateFilter('salaryLakhs', parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
-                  <div className="flex justify-between text-xs text-gray-500 mt-2">
-                    <span>$300</span>
-                    <span className="font-medium text-gray-900">${filters.salaryMax || 4600}</span>
-                    <span>$5k</span>
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>0</span>
+                    <span>2</span>
+                    <span>4</span>
+                    <span>6</span>
+                    <span>8</span>
+                    <span>10</span>
                   </div>
+                  {filters.salaryLakhs > 0 && (
+                    <div className="text-center mt-2">
+                      <span className="text-sm font-medium text-blue-600">{filters.salaryLakhs} LPA</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Availability */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Availability</label>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.isUrgent}
-                      onChange={(e) => updateFilter('isUrgent', e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Urgent</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.isRemote}
-                      onChange={(e) => updateFilter('isRemote', e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Remote</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.isFullTime}
-                      onChange={(e) => updateFilter('isFullTime', e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">Full-Time</span>
-                  </label>
-                </div>
+              {/* Years of Experience */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Years of experience</label>
+                <select
+                  value={filters.experienceYears}
+                  onChange={(e) => updateFilter('experienceYears', e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Select years of experience</option>
+                  <option value="0">0 years (Fresher)</option>
+                  <option value="1">1 year</option>
+                  <option value="2">2 years</option>
+                  <option value="3">3 years</option>
+                  <option value="4">4 years</option>
+                  <option value="5">5+ years</option>
+                </select>
               </div>
 
-              {/* Rating */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Rating</label>
-                <div className="flex items-center gap-2">
-                  <div className="flex">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <svg
-                        key={star}
-                        className={`w-5 h-5 ${star <= 4 ? 'text-yellow-400' : 'text-gray-300'}`}
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    ))}
-                  </div>
-                  <span className="text-sm text-gray-600">4.0</span>
-                </div>
+              {/* Clear All */}
+              <div className="mb-4">
+                <button
+                  onClick={() => {
+                    setFilters({
+                      page: 1,
+                      search: "",
+                      profile: "",
+                      location: "",
+                      salaryLakhs: 0,
+                      experienceYears: "",
+                      jobsInMyCity: false,
+                      workFromHome: false,
+                      partTime: false,
+                      sortBy: "date",
+                      sortOrder: "desc"
+                    });
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-800 underline"
+                >
+                  Clear all
+                </button>
               </div>
 
-              {/* Experience */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Experience</label>
-                <div className="space-y-2">
-                  {['Graphic Designer', 'UI Designer', 'UX Designer', 'Developer', 'UX Writer', 'Data Analyst', 'User Testing'].map((role) => (
-                    <label key={role} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={filters.experience.includes(role)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            updateFilter('experience', [...filters.experience, role]);
-                          } else {
-                            updateFilter('experience', filters.experience.filter(exp => exp !== role));
-                          }
-                        }}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">{role}</span>
-                    </label>
-                  ))}
+              {/* OR Separator */}
+              <div className="mb-4 text-center">
+                <span className="text-sm text-gray-500">OR</span>
+              </div>
+
+              {/* Search Input */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={filters.search}
+                    onChange={(e) => updateFilter('search', e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        loadJobs();
+                      }
+                    }}
+                    placeholder="e.g. Design, Mumbai, Infosys"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <button
+                    onClick={loadJobs}
+                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition flex items-center justify-center"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </div>
@@ -279,34 +449,6 @@ export default function JobSeekerJobList() {
 
           {/* Main Content */}
           <div className="lg:col-span-6">
-            {/* Search Bar */}
-            <div className="bg-white rounded-xl p-6 shadow-sm mb-6">
-              <div className="flex items-center gap-4">
-                <select 
-                  value={filters.location}
-                  onChange={(e) => updateFilter('location', e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="">Select Location</option>
-                  <option value="Indonesia">Indonesia</option>
-                  <option value="Bandung">Bandung</option>
-                  <option value="Jakarta">Jakarta</option>
-                  <option value="Surabaya">Surabaya</option>
-                </select>
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    value={filters.search}
-                    onChange={(e) => updateFilter('search', e.target.value)}
-                    placeholder="Search"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <svg className="absolute right-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
 
             {/* Popular Jobs Section */}
             {jobs.length > 0 && (
@@ -375,8 +517,8 @@ export default function JobSeekerJobList() {
                         <img src={getCompanyLogo(job.company)} alt={job.company} className="w-12 h-12 rounded-lg object-cover" />
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-lg">{job.company}</h3>
-                            {filters.isUrgent && (
+                            <h3 className="font-semibold text-lg">{job.title || job.company}</h3>
+                            {job.isUrgent && (
                               <span className="bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full">Urgent</span>
                             )}
                           </div>
@@ -499,7 +641,7 @@ export default function JobSeekerJobList() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 </div>
-                <h3 className="font-semibold text-lg mb-1">Pambayun</h3>
+                <h3 className="font-semibold text-lg mb-1">user</h3>
                 <p className="text-gray-500 text-sm mb-4">UI Designer</p>
                 
                 <div className="space-y-3 mb-6">

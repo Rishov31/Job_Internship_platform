@@ -172,6 +172,15 @@ exports.getAllJobs = async (req, res, next) => {
 
     const filter = { status };
     const scrapedFilter = { status: 'active' }; // Only active scraped jobs
+    
+    // Debug logging
+    logger.debug('Job filter request:', {
+      profile: req.query.profile,
+      search: search,
+      location: location,
+      page: page,
+      limit: limit
+    });
 
     // Apply basic filters
     if (jobType) {
@@ -186,28 +195,83 @@ exports.getAllJobs = async (req, res, next) => {
       filter.location = new RegExp(location, 'i');
       scrapedFilter.location = new RegExp(location, 'i');
     }
+    // Enhanced search filtering - search across multiple fields including HTML content
     if (search) {
-      filter.$text = { $search: search };
-      scrapedFilter.$text = { $search: search };
+      const searchValue = search.trim();
+      if (searchValue) {
+        // Escape special regex characters and create case-insensitive regex
+        const escapedSearch = searchValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchRegex = new RegExp(escapedSearch, 'i');
+        
+        // For regular jobs - comprehensive search including arrays
+        const searchConditions = {
+          $or: [
+            { title: searchRegex },
+            { description: searchRegex },
+            { company: searchRegex },
+            { location: searchRegex },
+            { category: searchRegex },
+            { skills: searchRegex } // Search in skills array (MongoDB automatically searches array elements)
+          ]
+        };
+        
+        // For scraped jobs, also search in HTML fields and arrays
+        const scrapedSearchConditions = {
+          $or: [
+            { title: searchRegex },
+            { description: searchRegex },
+            { descriptionHtml: searchRegex },
+            { fullDetailsHtml: searchRegex },
+            { company: searchRegex },
+            { location: searchRegex },
+            { category: searchRegex },
+            { skills: searchRegex }, // Search in skills array
+            { keyResponsibilities: searchRegex }, // Search in responsibilities array
+            { requirements: searchRegex }, // Search in requirements array
+            { otherRequirements: searchRegex } // Search in other requirements array
+          ]
+        };
+        
+        // Initialize $and array if it doesn't exist
+        if (!filter.$and) filter.$and = [];
+        if (!scrapedFilter.$and) scrapedFilter.$and = [];
+        
+        filter.$and.push(searchConditions);
+        scrapedFilter.$and.push(scrapedSearchConditions);
+      }
     }
 
     // Keyword filtering across description, descriptionHtml and skills
     if (keywords) {
       const list = keywords.split(',').map(k => k.trim()).filter(Boolean);
       if (list.length > 0) {
-        const andClauses = list.map(kw => ({
-          $or: [
-            { description: new RegExp(kw, 'i') },
-            { skills: new RegExp(kw, 'i') }
-          ]
-        }));
-        const scrapedAndClauses = list.map(kw => ({
-          $or: [
-            { description: new RegExp(kw, 'i') },
-            { descriptionHtml: new RegExp(kw, 'i') },
-            { skills: new RegExp(kw, 'i') }
-          ]
-        }));
+        const andClauses = list.map(kw => {
+          const kwRegex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          return {
+            $or: [
+              { description: kwRegex },
+              { title: kwRegex },
+              { company: kwRegex },
+              { skills: kwRegex }
+            ]
+          };
+        });
+        const scrapedAndClauses = list.map(kw => {
+          const kwRegex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+          return {
+            $or: [
+              { description: kwRegex },
+              { descriptionHtml: kwRegex },
+              { fullDetailsHtml: kwRegex },
+              { title: kwRegex },
+              { company: kwRegex },
+              { skills: kwRegex },
+              { keyResponsibilities: kwRegex },
+              { requirements: kwRegex },
+              { otherRequirements: kwRegex }
+            ]
+          };
+        });
         if (andClauses.length > 0) {
           filter.$and = (filter.$and || []).concat(andClauses);
         }
@@ -216,9 +280,25 @@ exports.getAllJobs = async (req, res, next) => {
         }
       }
     }
-    if (isRemote !== undefined) {
-      filter.isRemote = isRemote === 'true';
-      scrapedFilter.isRemote = isRemote === 'true';
+    // Handle job type filters (isRemote, isUrgent, isFullTime)
+    if (isRemote !== undefined && isRemote !== '' && isRemote !== 'false') {
+      filter.isRemote = isRemote === 'true' || isRemote === true;
+      scrapedFilter.isRemote = isRemote === 'true' || isRemote === true;
+    }
+    
+    // Handle urgent jobs filter
+    if (req.query.isUrgent !== undefined && req.query.isUrgent !== '' && req.query.isUrgent !== 'false') {
+      filter.isUrgent = req.query.isUrgent === 'true' || req.query.isUrgent === true;
+      scrapedFilter.isUrgent = req.query.isUrgent === 'true' || req.query.isUrgent === true;
+    }
+    
+    // Handle full-time filter (category-based or jobType)
+    if (req.query.isFullTime !== undefined && req.query.isFullTime !== '' && req.query.isFullTime !== 'false') {
+      // For full-time, we might want to filter by category or add a specific field
+      // This is a placeholder - adjust based on your data model
+      if (req.query.isFullTime === 'true' || req.query.isFullTime === true) {
+        // You can add specific logic here if needed
+      }
     }
     if (experience) {
       const expNum = parseInt(experience);
@@ -229,28 +309,157 @@ exports.getAllJobs = async (req, res, next) => {
         scrapedFilter['experience.max'] = { $gte: expNum };
       }
     }
+    // Skills filtering - match any of the provided skills
     if (skills) {
-      const skillsArray = skills.split(',').map(s => s.trim());
-      filter.skills = { $in: skillsArray.map(s => new RegExp(s, 'i')) };
-      scrapedFilter.skills = { $in: skillsArray.map(s => new RegExp(s, 'i')) };
+      const skillsArray = Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim()).filter(Boolean);
+      if (skillsArray.length > 0) {
+        const skillsRegex = skillsArray.map(s => new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
+        filter.skills = { $in: skillsRegex };
+        scrapedFilter.skills = { $in: skillsRegex };
+      }
+    }
+    
+    // Profile/Category filtering (similar to Internshala's profile filter)
+    // This should match jobs where the profile appears in title, description, category, skills, or any job-related field
+    if (req.query.profile) {
+      const profileValue = req.query.profile.trim();
+      if (profileValue) {
+        // Escape special regex characters and create case-insensitive regex for the full profile
+        // This will match "Video Editing" in "Video Editor", "video editing", etc.
+        const escapedProfile = profileValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const profileRegex = new RegExp(escapedProfile, 'i');
+        
+        // Also create individual word patterns for more flexible matching
+        const profileWords = profileValue.split(/\s+/).filter(w => w.length > 1); // Filter out single characters
+        const wordPatterns = profileWords.length > 1 
+          ? profileWords.map(word => {
+              const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              return new RegExp(escaped, 'i');
+            })
+          : [profileRegex];
+        
+        // For regular jobs - search in multiple fields including arrays
+        // Match if the profile (or its words) appears in ANY of these fields
+        const profileOrConditions = [
+          { category: profileRegex },
+          { title: profileRegex },
+          { description: profileRegex },
+          { company: profileRegex },
+          { skills: profileRegex } // Search in skills array
+        ];
+        
+        // Also add word-by-word matching for better results
+        wordPatterns.forEach(pattern => {
+          profileOrConditions.push(
+            { title: pattern },
+            { description: pattern },
+            { skills: pattern }
+          );
+        });
+        
+        const profileConditions = {
+          $or: profileOrConditions
+        };
+        
+        // For scraped jobs - search in even more fields including HTML content and arrays
+        const scrapedProfileOrConditions = [
+          { category: profileRegex },
+          { title: profileRegex },
+          { description: profileRegex },
+          { descriptionHtml: profileRegex },
+          { fullDetailsHtml: profileRegex },
+          { company: profileRegex },
+          { skills: profileRegex }, // Search in skills array
+          { keyResponsibilities: profileRegex }, // Search in responsibilities array
+          { requirements: profileRegex }, // Search in requirements array
+          { otherRequirements: profileRegex } // Search in other requirements array
+        ];
+        
+        // Also add word-by-word matching for scraped jobs
+        wordPatterns.forEach(pattern => {
+          scrapedProfileOrConditions.push(
+            { title: pattern },
+            { description: pattern },
+            { descriptionHtml: pattern },
+            { fullDetailsHtml: pattern },
+            { skills: pattern },
+            { keyResponsibilities: pattern },
+            { requirements: pattern },
+            { otherRequirements: pattern }
+          );
+        });
+        
+        const scrapedProfileConditions = {
+          $or: scrapedProfileOrConditions
+        };
+        
+        // Initialize $and array if it doesn't exist
+        if (!filter.$and) filter.$and = [];
+        if (!scrapedFilter.$and) scrapedFilter.$and = [];
+        
+        filter.$and.push(profileConditions);
+        scrapedFilter.$and.push(scrapedProfileConditions);
+      }
     }
 
-    // Salary filtering
+    // Salary filtering - support both min/max and annualCTC
     if (salaryMin || salaryMax) {
-      const salaryFilter = {};
+      const salaryConditions = [];
+      
       if (salaryMin && !isNaN(parseInt(salaryMin))) {
-        salaryFilter['salary.min'] = { $gte: parseInt(salaryMin) };
+        const minVal = parseInt(salaryMin);
+        salaryConditions.push({
+          $or: [
+            { 'salary.min': { $gte: minVal } },
+            { 'salary.max': { $gte: minVal } },
+            { 'salary.annualCTCMin': { $gte: minVal } },
+            { 'salary.annualCTCMax': { $gte: minVal } }
+          ]
+        });
       }
+      
       if (salaryMax && !isNaN(parseInt(salaryMax))) {
-        salaryFilter['salary.max'] = { $lte: parseInt(salaryMax) };
+        const maxVal = parseInt(salaryMax);
+        salaryConditions.push({
+          $or: [
+            { 'salary.min': { $lte: maxVal } },
+            { 'salary.max': { $lte: maxVal } },
+            { 'salary.annualCTCMin': { $lte: maxVal } },
+            { 'salary.annualCTCMax': { $lte: maxVal } }
+          ]
+        });
       }
-      if (Object.keys(salaryFilter).length > 0) {
-        Object.assign(filter, salaryFilter);
-        Object.assign(scrapedFilter, salaryFilter);
+      
+      if (salaryConditions.length > 0) {
+        filter.$and = (filter.$and || []).concat(salaryConditions);
+        scrapedFilter.$and = (scrapedFilter.$and || []).concat(salaryConditions);
+      }
+    }
+    
+    // Handle salary in lakhs (convert to actual amount) - this is the main filter from UI
+    if (req.query.salaryLakhs) {
+      const lakhs = parseFloat(req.query.salaryLakhs);
+      if (!isNaN(lakhs) && lakhs > 0) {
+        const salaryInRupees = lakhs * 100000;
+        // Find jobs where the maximum salary is at least the selected amount
+        const salaryFilter = {
+          $or: [
+            { 'salary.annualCTCMax': { $gte: salaryInRupees } },
+            { 'salary.max': { $gte: salaryInRupees } },
+            { 'salary.annualCTCMin': { $gte: salaryInRupees } },
+            { 'salary.min': { $gte: salaryInRupees } }
+          ]
+        };
+        filter.$and = (filter.$and || []).concat([salaryFilter]);
+        scrapedFilter.$and = (scrapedFilter.$and || []).concat([salaryFilter]);
       }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Debug: Log the filters being used
+    logger.debug('Regular job filter:', JSON.stringify(filter, null, 2));
+    logger.debug('Scraped job filter:', JSON.stringify(scrapedFilter, null, 2));
     
     // Get both regular and scraped jobs
     const [regularJobs, scrapedJobs] = await Promise.all([
@@ -263,6 +472,8 @@ exports.getAllJobs = async (req, res, next) => {
           .sort({ lastScraped: -1 })
           .lean() : []
     ]);
+    
+    logger.debug(`Found ${regularJobs.length} regular jobs and ${scrapedJobs.length} scraped jobs`);
 
     // Combine and format jobs
     const allJobs = [

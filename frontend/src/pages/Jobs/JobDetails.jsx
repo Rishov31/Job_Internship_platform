@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getJobById, saveJob, unsaveJob, checkSavedJobs } from "../../api/jobApi";
+import ApplicationFormModal from "../../components/ApplicationFormModal";
+import { checkApplication } from "../../api/applicationApi";
 
 export default function JobDetails() {
   const { id } = useParams();
@@ -10,6 +12,8 @@ export default function JobDetails() {
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState(null);
+  const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
 
   useEffect(() => {
     loadJobDetails();
@@ -18,8 +22,26 @@ export default function JobDetails() {
   useEffect(() => {
     if (job) {
       checkSavedStatus();
+      checkApplicationStatus();
     }
   }, [job]);
+
+  const checkApplicationStatus = async () => {
+    if (!job || job.isScraped) return; // Don't check for scraped jobs
+    
+    try {
+      const data = await checkApplication(job._id, job.isScraped);
+      setHasApplied(data.applied || false);
+    } catch (error) {
+      console.error('Error checking application status:', error);
+    }
+  };
+
+  const handleApplicationSuccess = () => {
+    setHasApplied(true);
+    // Optionally reload job to update application count
+    loadJobDetails();
+  };
 
   const loadJobDetails = async () => {
     try {
@@ -253,9 +275,21 @@ export default function JobDetails() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                   </svg>
                 </button>
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
-                  Apply now
-                </button>
+                {hasApplied ? (
+                  <button 
+                    disabled
+                    className="bg-gray-400 text-white px-6 py-2 rounded-lg font-medium cursor-not-allowed"
+                  >
+                    Already Applied
+                  </button>
+                ) : (
+                  <button 
+                    onClick={() => setShowApplicationForm(true)}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    Apply now
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -497,8 +531,18 @@ export default function JobDetails() {
                   >
                     Apply on {job.source}
                   </a>
+                ) : hasApplied ? (
+                  <button 
+                    disabled
+                    className="bg-gray-400 text-white px-6 py-2 rounded-lg font-medium cursor-not-allowed"
+                  >
+                    Already Applied
+                  </button>
                 ) : (
-                  <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
+                  <button 
+                    onClick={() => setShowApplicationForm(true)}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium"
+                  >
                     Apply now
                   </button>
                 )}
@@ -507,6 +551,16 @@ export default function JobDetails() {
           </div>
         </div>
       </div>
+
+      {/* Application Form Modal */}
+      {!job.isScraped && (
+        <ApplicationFormModal
+          job={job}
+          isOpen={showApplicationForm}
+          onClose={() => setShowApplicationForm(false)}
+          onSuccess={handleApplicationSuccess}
+        />
+      )}
     </div>
   );
 }

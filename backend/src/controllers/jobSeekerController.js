@@ -77,8 +77,43 @@ exports.completion = async (req,res,next)=>{
 
 exports.myApplications = async (req,res,next)=>{
   try{
-    const apps = await Application.find({ applicant: req.user.id }).populate("job","title company location jobType").sort({ createdAt:-1 });
-    res.json({ applications: apps });
+    const { limit, page = 1 } = req.query;
+    const skip = (parseInt(page) - 1) * (limit ? parseInt(limit) : 0);
+    
+    const apps = await Application.find({ applicant: req.user.id })
+      .populate("job", "title company location jobType")
+      .populate("scrapedJob", "title company location source")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit ? parseInt(limit) : 0);
+    
+    const total = await Application.countDocuments({ applicant: req.user.id });
+    
+    // Format applications to include job data (either from job or scrapedJob)
+    const formattedApps = apps.map(app => {
+      const jobData = app.job || app.scrapedJob;
+      return {
+        ...app.toObject(),
+        job: jobData ? {
+          _id: jobData._id,
+          title: jobData.title,
+          company: jobData.company,
+          location: jobData.location,
+          jobType: jobData.jobType || 'private',
+          source: app.isScraped ? (jobData.source || 'external') : 'internal'
+        } : null
+      };
+    });
+    
+    res.json({ 
+      applications: formattedApps,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: limit ? parseInt(limit) : total,
+        totalPages: limit ? Math.ceil(total / parseInt(limit)) : 1
+      }
+    });
   }catch(e){ next(e); }
 };
 

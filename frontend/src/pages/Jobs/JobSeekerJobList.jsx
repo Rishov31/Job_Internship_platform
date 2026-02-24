@@ -269,9 +269,9 @@ export default function JobSeekerJobList() {
             <nav className="hidden md:flex items-center gap-6">
               <Link to="/jobseeker/dashboard" className="text-gray-600 hover:text-gray-900">Portfolio</Link>
               <Link to="/jobseeker/jobs" className="text-blue-600 border-b-2 border-blue-600 pb-1">Jobs</Link>
-              <Link to="/jobseeker/messages" className="text-gray-600 hover:text-gray-900">Message</Link>
+              {/* <Link to="/jobseeker/messages" className="text-gray-600 hover:text-gray-900">Message</Link>
               <Link to="/jobseeker/community" className="text-gray-600 hover:text-gray-900">Community</Link>
-              <Link to="/jobseeker/notifications" className="text-gray-600 hover:text-gray-900">Notifications</Link>
+              <Link to="/jobseeker/notifications" className="text-gray-600 hover:text-gray-900">Notifications</Link> */}
             </nav>
           </div>
           <button className="text-gray-600 hover:text-gray-900">Logout</button>
@@ -644,7 +644,7 @@ export default function JobSeekerJobList() {
                 <h3 className="font-semibold text-lg mb-1">user</h3>
                 <p className="text-gray-500 text-sm mb-4">UI Designer</p>
                 
-                <div className="space-y-3 mb-6">
+                {/* <div className="space-y-3 mb-6">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">28 Available Connects</span>
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -653,11 +653,11 @@ export default function JobSeekerJobList() {
                     <span className="text-sm text-gray-600">9 Submitted Proposal</span>
                     <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   </div>
-                </div>
+                </div> */}
                 
-                <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+                {/* <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition">
                   Edit Profile
-                </button>
+                </button> */}
               </div>
             </div>
 

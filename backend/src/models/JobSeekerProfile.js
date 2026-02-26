@@ -34,8 +34,16 @@ const jobSeekerProfileSchema = new mongoose.Schema(
     skills: { technical: [String], soft: [String] },
     resume: { fileName: String, fileUrl: String, uploadedAt: Date },
     preferences: { jobCategories: [String], locations: [String], jobAlerts: { type: Boolean, default: true } },
+    // Dashboard & contribution metrics
     isProfileComplete: { type: Boolean, default: false },
     profileCompletionPercentage: { type: Number, default: 0 },
+    contributionScore: { type: Number, default: 0 },
+    collaborationLevel: {
+      type: String,
+      enum: ["Bronze", "Silver", "Gold", "Platinum"],
+      default: "Bronze",
+    },
+    badges: [String],
   },
   { timestamps: true }
 );

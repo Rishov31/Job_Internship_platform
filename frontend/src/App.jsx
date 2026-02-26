@@ -8,6 +8,9 @@ import Register from "./pages/Register";
 import EmployerDashboard from "./pages/Dashboard/EmployerDashboard";
 import EmployerProfile from "./pages/Dashboard/EmployerProfile";
 import AdminDashboard from "./pages/Dashboard/AdminDashboard";
+import InvestorDashboard from "./pages/Dashboard/InvestorDashboard";
+import StudentDashboard from "./pages/Dashboard/StudentDashboard";
+import StartupDashboard from "./pages/Dashboard/StartupDashboard";
 
 // Job components
 import PostJob from "./pages/Jobs/PostJob";
@@ -43,7 +46,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Employer Routes */}
+        {/* Employer Routes (job posting module) */}
         <Route path="/employer/dashboard" element={<EmployerDashboard />} />
         <Route path="/employer/profile" element={<EmployerProfile />} />
         <Route path="/employer/post-job" element={<PostJob />} />
@@ -53,7 +56,10 @@ export default function App() {
         {/* Public Job Details */}
         <Route path="/jobs/:id" element={<JobDetails />} />
 
-      {/* Jobseeker Routes */}
+      {/* Student Ecosystem Dashboard (new) */}
+      <Route path="/student/dashboard" element={<StudentDashboard />} />
+
+      {/* Jobseeker Routes (job & internship sub‑module) */}
       <Route path="/jobseeker/dashboard" element={<JobSeekerDashboard />} />
       <Route path="/jobseeker/profile" element={<JobSeekerProfile />} />
       <Route path="/jobseeker/applications" element={<JobSeekerApplications />} />
@@ -64,6 +70,9 @@ export default function App() {
 
       {/* Admin Routes */}
       <Route path="/admin/dashboard" element={<AdminDashboard />} />
+
+      {/* Startup Ecosystem Dashboard (new) */}
+      <Route path="/startup/dashboard" element={<StartupDashboard />} />
       <Route path="/admin/resources" element={<ResourceManagement />} />
 
       {/* Public Resource Routes */}
@@ -77,6 +86,9 @@ export default function App() {
       <Route path="/mentor/dashboard" element={<MentorDashboard />} />
       <Route path="/mentor/chat" element={<MentorChats />} />
       <Route path="/mentor/video-call" element={<MentorVideoCall />} />
+
+      {/* Investor Routes */}
+      <Route path="/investor/dashboard" element={<InvestorDashboard />} />
 
       {/* Notifications Route */}
       <Route path="/notifications" element={<Notifications />} />

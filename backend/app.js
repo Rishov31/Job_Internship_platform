@@ -114,6 +114,9 @@ app.use("/api/mentoring-sessions", require("./src/routes/mentoringSessionRoutes"
 app.use("/api/chat", require("./src/routes/chatRoutes"));
 app.use("/api/scraper", require("./src/routes/scraperRoutes"));
 app.use("/api/notifications", require("./src/routes/notificationRoutes"));
+app.use("/api/startups", require("./src/routes/startupRoutes"));
+app.use("/api/contributions", require("./src/routes/contributionRoutes"));
+app.use("/api/investor", require("./src/routes/investorRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

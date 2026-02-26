@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["jobseeker", "employer", "mentor", "others"],
+      enum: ["jobseeker", "employer", "mentor", "investor", "others"],
       default: "jobseeker",
       index: true,
     },

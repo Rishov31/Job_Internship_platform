@@ -1,11 +1,29 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { registerUser } from "../api/authApi";
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [form, setForm] = useState({ fullName: "", email: "", password: "", role: "jobseeker" });
   const [submitting, setSubmitting] = useState(false);
+
+  // Map backend role keys to nicer labels used in UI
+  const roleLabels = {
+    jobseeker: "Student",
+    employer: "Startup",
+    investor: "Investor",
+  };
+
+  useEffect(() => {
+    const roleFromQuery = searchParams.get("role");
+    if (!roleFromQuery) return;
+
+    // Only allow known roles from URL
+    if (["jobseeker", "employer", "investor"].includes(roleFromQuery)) {
+      setForm((prev) => ({ ...prev, role: roleFromQuery }));
+    }
+  }, [searchParams]);
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -14,15 +32,19 @@ export default function Register() {
     setSubmitting(true);
     try {
       const response = await registerUser(form);
+      const role = response.user?.role;
+
       // Redirect based on user role
-      if (response.user?.role === "employer") {
-        navigate("/employer/dashboard");
-      } else if (response.user?.role === "jobseeker") {
-        navigate("/jobseeker/dashboard");
-      } else if (response.user?.role === "mentor") {
+      if (role === "employer") {
+        // Startup dashboard (new ecosystem view)
+        navigate("/startup/dashboard");
+      } else if (role === "jobseeker") {
+        // Student dashboard (new ecosystem view)
+        navigate("/student/dashboard");
+      } else if (role === "investor") {
+        navigate("/investor/dashboard");
+      } else if (role === "mentor") {
         navigate("/mentor/dashboard");
-      } else if (response.user?.role === "others") {
-        navigate("/login");
       } else {
         navigate("/login");
       }
@@ -35,9 +57,11 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded-lg shadow">
         <div className="text-center">
-          <div className="text-sky-600 font-extrabold text-xl">HireMe</div>
+          <div className="text-sky-600 font-extrabold text-xl">HireTalent</div>
           <h1 className="mt-2 text-2xl font-bold">Create your account</h1>
-          <p className="mt-1 text-sm text-gray-600">Join to find internships, jobs and courses.</p>
+          <p className="mt-1 text-sm text-gray-600">
+            Join the Startup & MSME Talent Ecosystem.
+          </p>
         </div>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
@@ -74,18 +98,31 @@ export default function Register() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Role</label>
-            <select
-              name="role"
-              value={form.role}
-              onChange={onChange}
-              className="mt-1 w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            >
-              <option value="jobseeker">Job Seeker</option>
-              <option value="employer">Employer</option>
-              <option value="mentor">Mentor</option>
-              <option value="others">Others</option>
-            </select>
+            <label className="block text-sm font-medium mb-2">Select your role</label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              {["jobseeker", "employer", "investor"].map((roleKey) => {
+                const active = form.role === roleKey;
+                return (
+                  <button
+                    key={roleKey}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, role: roleKey }))}
+                    className={`rounded-lg border px-3 py-2 text-left transition ${
+                      active
+                        ? "border-sky-500 bg-sky-50 text-sky-700"
+                        : "border-gray-200 hover:border-sky-300 hover:bg-sky-50/60"
+                    }`}
+                  >
+                    <div className="font-semibold">{roleLabels[roleKey]}</div>
+                    <div className="mt-0.5 text-xs text-gray-500">
+                      {roleKey === "jobseeker" && "Explore jobs, internships & contributions"}
+                      {roleKey === "employer" && "Post roles, open-source issues & rewards"}
+                      {roleKey === "investor" && "Track startup growth & manage portfolio"}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <button
             type="submit"

@@ -14,14 +14,20 @@ export default function Login() {
     setSubmitting(true);
     try {
       const response = await loginUser(form);
+      const user = response.user;
+
       // Redirect based on user role and admin status
-      if (response.user?.isAdmin) {
+      if (user?.isAdmin) {
         navigate("/admin/dashboard");
-      } else if (response.user?.role === "employer") {
-        navigate("/employer/dashboard");
-      } else if (response.user?.role === "jobseeker") {
-        navigate("/jobseeker/dashboard");
-      } else if (response.user?.role === "mentor") {
+      } else if (user?.role === "employer") {
+        // Primary home is Startup dashboard; job posting lives under /employer/*
+        navigate("/startup/dashboard");
+      } else if (user?.role === "jobseeker") {
+        // Primary home is Student dashboard; job search lives under /jobseeker/*
+        navigate("/student/dashboard");
+      } else if (user?.role === "investor") {
+        navigate("/investor/dashboard");
+      } else if (user?.role === "mentor") {
         navigate("/mentor/dashboard");
       } else {
         navigate("/");

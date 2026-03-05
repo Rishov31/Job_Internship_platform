@@ -34,6 +34,17 @@ export default function Register() {
       const response = await registerUser(form);
       const role = response.user?.role;
 
+      // store token & user so subsequent dashboard API calls are authenticated
+      if (response.token) {
+        try {
+          localStorage.setItem("token", response.token);
+          localStorage.setItem("role", role || "");
+          localStorage.setItem("user", JSON.stringify(response.user));
+        } catch {
+          // ignore storage failure
+        }
+      }
+
       // Redirect based on user role
       if (role === "employer") {
         // Startup dashboard (new ecosystem view)

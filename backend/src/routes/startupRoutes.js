@@ -12,6 +12,8 @@ router.get("/:id/overview", ctrl.getStartupOverview);
 router.use(auth);
 router.get("/me", requireRole("employer"), ctrl.getMyStartup);
 router.post("/me", requireRole("employer"), ctrl.upsertMyStartup);
+router.post("/me/funding", requireRole("employer"), ctrl.raiseFunding);
+router.post("/me/repos", requireRole("employer"), ctrl.addRepository);
 
 module.exports = router;
 

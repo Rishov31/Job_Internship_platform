@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import NotificationBell from "../../components/NotificationBell";
+// import NotificationBell from "../../components/NotificationBell";
 
 export default function InvestorDashboard() {
   const [totalPortfolio, setTotalPortfolio] = useState(0);
@@ -120,7 +120,7 @@ export default function InvestorDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            <NotificationBell />
+            {/* Notifications temporarily disabled */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs text-slate-400">Investor</p>

@@ -57,3 +57,65 @@ exports.exploreStartups = async (req, res, next) => {
   }
 };
 
+// Founder: raise funding (add to capitalRaised and history)
+exports.raiseFunding = async (req, res, next) => {
+  try {
+    const { amount } = req.body || {};
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) {
+      return res.status(400).json({ message: "amount must be a positive number" });
+    }
+
+    // Create startup shell on first funding action if needed
+    let startup = await Startup.findOne({ owner: req.user.id });
+    if (!startup) {
+      startup = await Startup.create({
+        owner: req.user.id,
+        name: "Your Startup Name",
+      });
+    }
+
+    startup.capitalRaised = (startup.capitalRaised || 0) + numericAmount;
+    startup.capitalHistory.push({ amount: numericAmount });
+    await startup.save();
+
+    res.json({ startup });
+  } catch (e) {
+    next(e);
+  }
+};
+
+// Founder: link a GitHub repository with optional reward details
+exports.addRepository = async (req, res, next) => {
+  try {
+    const { name, url, rewardDetails } = req.body || {};
+    if (!url) {
+      return res.status(400).json({ message: "Repository url is required" });
+    }
+
+    // Create startup shell on first repo link if needed
+    let startup = await Startup.findOne({ owner: req.user.id });
+    if (!startup) {
+      startup = await Startup.create({
+        owner: req.user.id,
+        name: "Your Startup Name",
+      });
+    }
+
+    const repoName = name || (typeof url === "string" ? url.split("/").filter(Boolean).pop() : "Repository");
+
+    startup.githubRepos = startup.githubRepos || [];
+    startup.githubRepos.push({
+      name: repoName,
+      url,
+      rewardDetails: rewardDetails || "",
+    });
+    await startup.save();
+
+    res.status(201).json({ startup });
+  } catch (e) {
+    next(e);
+  }
+};
+
+

@@ -5,6 +5,8 @@ export async function registerUser(payload) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+    // Ensure auth cookie is set right after registration
+    credentials: "include",
   });
   if (!res.ok) throw new Error("Registration failed");
   return res.json();

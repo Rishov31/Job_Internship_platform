@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import NotificationBell from "../../components/NotificationBell";
+// import NotificationBell from "../../components/NotificationBell";
 import { me } from "../../api/authApi";
 import { getJobStats, getEmployerJobs } from "../../api/jobApi";
 
@@ -19,22 +19,93 @@ export default function StartupDashboard() {
   const [jobCards, setJobCards] = useState([]);
   const navigate = useNavigate();
 
+  const recomputeStatsFromStartup = (s, prev) => {
+    if (!s) return prev || stats;
+    return {
+      ...(prev || stats),
+      totalCapitalCr: (s.capitalRaised || 0) / 1_00_00_000,
+      totalInvestors: s.totalInvestors || 0,
+      contributors: s.contributorsCount || 0,
+      activeProjects: s.activeProjects || 0,
+    };
+  };
+
+  const handleRaiseFunding = async () => {
+    const input = window.prompt("Enter funding amount in INR (e.g. 500000)", "");
+    if (!input) return;
+    const amount = Number(String(input).replace(/,/g, ""));
+    if (!amount || amount <= 0) {
+      alert("Please enter a valid positive amount.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/startups/me/funding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 403) {
+          alert(
+            "Forbidden: this action is only available for Startup accounts. Please login with a Startup (employer) role."
+          );
+        } else {
+          alert(data.message || "Failed to raise funding");
+        }
+        return;
+      }
+      setStartup(data.startup);
+      setStats((prev) => recomputeStatsFromStartup(data.startup, prev));
+    } catch (e) {
+      alert("Error raising funding. Please try again.");
+    }
+  };
+
+  const handleLinkRepository = async () => {
+    const url = window.prompt("Enter GitHub repository URL", "");
+    if (!url) return;
+    const rewardDetails = window.prompt(
+      "Describe contribution rewards (optional)",
+      "Innovation badge + goodies"
+    );
+    try {
+      const res = await fetch("/api/startups/me/repos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ url, rewardDetails }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 403) {
+          alert(
+            "Forbidden: this action is only available for Startup accounts. Please login with a Startup (employer) role."
+          );
+        } else {
+          alert(data.message || "Failed to link repository");
+        }
+        return;
+      }
+      setStartup(data.startup);
+      setStats((prev) => recomputeStatsFromStartup(data.startup, prev));
+    } catch (e) {
+      alert("Error linking repository. Please try again.");
+    }
+  };
+
   useEffect(() => {
     // Basic user + job stats from existing APIs
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const API_BASE =
-          import.meta?.env?.VITE_API_URL || "http://localhost:5000/api";
-
         const [userData, jobStats, employerJobs, startupRes] = await Promise.all([
           me(),
           getJobStats().catch(() => null),
           getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
-          fetch(`${API_BASE}/startups/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-            credentials: "include",
-          }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`/api/startups/me`, { credentials: "include" }).then((r) =>
+            r.ok ? r.json() : null
+          ),
         ]);
 
         if (userData) setUser(userData);
@@ -161,7 +232,7 @@ export default function StartupDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            <NotificationBell />
+            {/* Notifications temporarily disabled */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs text-slate-400">Founder</p>
@@ -209,7 +280,25 @@ export default function StartupDashboard() {
                 </div>
               </div>
               <div className="h-28 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-400">
-                Capital / growth graph placeholder.
+                {startup?.capitalHistory && startup.capitalHistory.length > 0 ? (
+                  <div className="w-full h-full flex items-end gap-1 px-3 pb-2">
+                    {startup.capitalHistory.slice(-8).map((entry, idx) => (
+                      <div
+                        key={`${entry.date}-${idx}`}
+                        className="flex-1 rounded-full bg-gradient-to-t from-sky-400 to-indigo-300"
+                        style={{
+                          height: `${Math.min(
+                            100,
+                            (entry.amount / (startup.capitalRaised || 1)) * 100 +
+                              15
+                          )}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <>Capital / growth graph placeholder.</>
+                )}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-[11px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
@@ -247,9 +336,12 @@ export default function StartupDashboard() {
                 Track your round progress and raise new capital.
               </p>
               <div className="h-20 rounded-xl bg-gradient-to-br from-emerald-400/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-300">
-                Funding progress graph placeholder.
+                ₹{stats.totalCapitalCr.toFixed(2)}Cr raised so far.
               </div>
-              <button className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600">
+              <button
+                onClick={handleRaiseFunding}
+                className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600"
+              >
                 Raise Funding
               </button>
             </section>
@@ -333,7 +425,10 @@ export default function StartupDashboard() {
                     Showcase active projects & onboard contributors
                   </p>
                 </div>
-                <button className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white text-indigo-600 hover:bg-slate-100">
+                <button
+                  onClick={handleLinkRepository}
+                  className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white text-indigo-600 hover:bg-slate-100"
+                >
                   Link Repository
                 </button>
               </div>

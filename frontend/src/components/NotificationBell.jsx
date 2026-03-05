@@ -28,32 +28,36 @@ export default function NotificationBell() {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      // Fetch both in parallel, but handle errors separately
       const results = await Promise.allSettled([
         getNotifications({ limit: 10, isRead: false }),
         getUnreadCount(),
       ]);
-      
+
       // Handle notifications result
-      if (results[0].status === 'fulfilled') {
+      if (results[0].status === "fulfilled") {
         setNotifications(results[0].value.notifications || []);
       } else {
-        console.error('Error fetching notifications:', results[0].reason);
-        // Keep existing notifications on error
+        // Silently ignore unauthenticated errors so dashboards don't spam console
+        if (results[0].reason?.message !== "Not authenticated") {
+          console.error("Error fetching notifications:", results[0].reason);
+        }
       }
-      
+
       // Handle unread count result
-      if (results[1].status === 'fulfilled') {
+      if (results[1].status === "fulfilled") {
         setUnreadCount(results[1].value.unreadCount || 0);
       } else {
-        console.error('Error fetching unread count:', results[1].reason);
-        // Keep existing count on error, or set to 0 if we have notifications
-        if (results[0].status === 'fulfilled') {
+        if (results[1].reason?.message !== "Not authenticated") {
+          console.error("Error fetching unread count:", results[1].reason);
+        }
+        if (results[0].status === "fulfilled") {
           setUnreadCount((results[0].value.notifications || []).length);
         }
       }
     } catch (error) {
-      console.error('Error in fetchNotifications:', error);
+      if (error?.message !== "Not authenticated") {
+        console.error("Error in fetchNotifications:", error);
+      }
     } finally {
       setLoading(false);
     }

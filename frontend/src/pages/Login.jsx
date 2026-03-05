@@ -16,6 +16,17 @@ export default function Login() {
       const response = await loginUser(form);
       const user = response.user;
 
+      // persist token & basic user info for dashboards
+      if (response.token) {
+        try {
+          localStorage.setItem("token", response.token);
+          localStorage.setItem("role", user?.role || "");
+          localStorage.setItem("user", JSON.stringify(user));
+        } catch {
+          // ignore storage failure
+        }
+      }
+
       // Redirect based on user role and admin status
       if (user?.isAdmin) {
         navigate("/admin/dashboard");

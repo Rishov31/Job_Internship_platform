@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import NotificationBell from "../../components/NotificationBell";
+// import NotificationBell from "../../components/NotificationBell";
 
 // This dashboard is a higher-level student view.
 // Job & internship search remain in the existing jobseeker module (sub‑module).
@@ -14,12 +14,18 @@ export default function StudentDashboard() {
   const [collaborations, setCollaborations] = useState(0);
   const [contributionScore, setContributionScore] = useState(0);
   const [startupCards, setStartupCards] = useState([]);
+  // Fallback user info from auth for when detailed profile is not yet created
+  let storedUser = null;
+  try {
+    storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  } catch {
+    storedUser = null;
+  }
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const API_BASE =
-      import.meta?.env?.VITE_API_URL || "http://localhost:5000/api";
+    const API_BASE = "/api"; // use relative API path so proxy always works
 
     // Load student profile basics from existing jobseeker profile
     fetch(`${API_BASE}/jobseeker/profile`, {
@@ -47,9 +53,7 @@ export default function StudentDashboard() {
       .catch(() => {});
 
     // Startup explorer cards
-    fetch(`${API_BASE}/startups/explore?limit=4`, {
-      credentials: "include",
-    })
+    fetch(`/api/startups/explore?limit=4`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.startups) {
@@ -57,8 +61,16 @@ export default function StudentDashboard() {
             id: s._id,
             name: s.name,
             role: s.industry || "Startup",
-            stipend: "Open positions",
+            stipend:
+              s.capitalRaised && s.capitalRaised > 0
+                ? `₹${(s.capitalRaised / 1_00_00_000).toFixed(1)}Cr raised`
+                : "New startup",
             type: s.stage || "pre-seed",
+            description: s.description,
+            githubUrl:
+              (s.githubRepos && s.githubRepos[0]?.url) || s.githubUrl || "",
+            reward:
+              (s.githubRepos && s.githubRepos[0]?.rewardDetails) || null,
           }));
           setStartupCards(mapped);
         }
@@ -66,7 +78,7 @@ export default function StudentDashboard() {
       .catch(() => {});
 
     // Contributions summary for collaboration count & score
-    fetch(`${API_BASE}/contributions/student/me`, {
+    fetch(`/api/contributions/student/me`, {
       headers: { Authorization: `Bearer ${token}` },
       credentials: "include",
     })
@@ -187,18 +199,23 @@ export default function StudentDashboard() {
           </div>
 
           <div className="flex items-center gap-4">
-            <NotificationBell />
+            {/* Notifications temporarily disabled */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs text-slate-400">Student</p>
                 <p className="text-sm font-medium text-slate-100">
-                  {profile?.personalInfo?.firstName ||
-                    profile?.personalInfo?.lastName ||
-                    "You"}
+                    {profile?.personalInfo?.firstName ||
+                      profile?.personalInfo?.lastName ||
+                      storedUser?.fullName ||
+                      "You"}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-semibold text-slate-100">
-                {(profile?.personalInfo?.firstName || "S").charAt(0)}
+                {(
+                  profile?.personalInfo?.firstName ||
+                  storedUser?.fullName ||
+                  "S"
+                ).charAt(0)}
               </div>
             </div>
             <button
@@ -219,16 +236,21 @@ export default function StudentDashboard() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-white text-lg font-semibold">
-                    {(profile?.personalInfo?.firstName || "S").charAt(0)}
+                    {(
+                      profile?.personalInfo?.firstName ||
+                      storedUser?.fullName ||
+                      "S"
+                    ).charAt(0)}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-50">
+                    <p>Rishov Saha</p>
+                    {/* <p className="text-sm font-semibold text-slate-50">
                       {profile?.personalInfo
                         ? `${profile.personalInfo.firstName || ""} ${
                             profile.personalInfo.lastName || ""
                           }`.trim()
-                        : "Student Name"}
-                    </p>
+                        : storedUser?.fullName || "Student Name"}
+                    </p> */}
                     <p className="text-xs text-slate-400">
                       {profile?.professionalInfo?.currentTitle ||
                         "Add your current role / program"}
@@ -328,8 +350,14 @@ export default function StudentDashboard() {
               <p className="text-xs text-slate-400 mb-3">
                 Track your open‑source and startup contributions over time.
               </p>
-              <div className="h-24 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-400">
-                Graph placeholder – plug chart library here.
+              <div className="h-24 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-end gap-1 px-3 pb-2 text-[11px] text-slate-400">
+                {[10, 25, 40, 55, 45, 65, 80].map((h, idx) => (
+                  <div
+                    key={idx}
+                    className="flex-1 rounded-full bg-gradient-to-t from-sky-400 to-violet-300"
+                    style={{ height: `${h}%` }}
+                  />
+                ))}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
@@ -385,17 +413,36 @@ export default function StudentDashboard() {
                     className="rounded-xl border border-slate-700 bg-slate-900/80 p-3 hover:bg-slate-800 cursor-pointer"
                   >
                     <p className="text-[11px] font-semibold text-slate-100">
-                      {s.role}
+                      {s.name}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      {s.name} • Remote
+                      {s.role} • {s.type}
                     </p>
-                    <p className="mt-1 text-[11px] text-slate-300">
-                      {s.stipend} • {s.type}
-                    </p>
-                    <button className="mt-2 text-[11px] text-sky-300 font-medium">
-                      View startup →
-                    </button>
+                    {s.stipend && (
+                      <p className="mt-1 text-[11px] text-slate-300">
+                        {s.stipend}
+                      </p>
+                    )}
+                    {s.description && (
+                      <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                        {s.description}
+                      </p>
+                    )}
+                    {s.reward && (
+                      <p className="mt-1 text-[11px] text-emerald-300">
+                        Reward: {s.reward}
+                      </p>
+                    )}
+                    {s.githubUrl && (
+                      <a
+                        href={s.githubUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-block text-[11px] text-sky-300 font-medium"
+                      >
+                        View GitHub repo →
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
@@ -445,8 +492,14 @@ export default function StudentDashboard() {
               <p className="text-[11px] text-slate-400 mb-3">
                 Track your skill growth and startup collaborations.
               </p>
-              <div className="h-24 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-700/40 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-400">
-                Analytics graph placeholder – integrate chart library later.
+              <div className="h-24 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-700/40 border border-dashed border-slate-700 px-3 flex items-end gap-1 text-[11px] text-slate-400">
+                {[15, 30, 20, 35, 45, 55].map((h, idx) => (
+                  <div
+                    key={idx}
+                    className="flex-1 rounded-full bg-gradient-to-t from-slate-500 to-sky-300"
+                    style={{ height: `${h}%` }}
+                  />
+                ))}
               </div>
             </section>
 

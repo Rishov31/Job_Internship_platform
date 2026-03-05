@@ -28,7 +28,7 @@ export default function LandingPage() {
               <span className="text-lg font-extrabold tracking-tight">HireTalent</span>
               <span className="text-[11px] text-slate-400 -mt-1">
                 Startup & MSME Talent Ecosystem
-              </span>
+            </span>
             </div>
           </div>
 
@@ -244,7 +244,7 @@ export default function LandingPage() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                </div>
 
                   {/* Faint background image for depth */}
                   <div className="pointer-events-none absolute inset-0 opacity-20 mix-blend-screen">

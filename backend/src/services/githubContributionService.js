@@ -69,24 +69,34 @@ function commitBelongsToGithubUser(commitObj, githubUsername, accountEmails = []
 }
 
 const MAX_BRANCHES_DEFAULT = parseInt(
-  process.env.GITHUB_MAX_BRANCHES_PER_REPO || "25",
+  process.env.GITHUB_MAX_BRANCHES_PER_REPO || "150",
   10
 );
 const MAX_PAGES_PER_BRANCH = parseInt(
   process.env.GITHUB_MAX_PAGES_PER_BRANCH || "6",
   10
 );
+/** Max branch names to list from GitHub (paginated); avoids missing late-alphabet branches like "Rishov". */
+const MAX_BRANCH_NAMES_LIST = parseInt(
+  process.env.GITHUB_MAX_BRANCH_NAMES_LIST || "500",
+  10
+);
 
-/** Prefer default-like branches first, then keep API order (up to `max`). */
+/** Prefer default-like branches first (case-insensitive), then alphabetical API order (up to `max`). */
 function prioritizeBranchNames(names, max) {
   if (!Array.isArray(names) || !names.length) return [];
   const preferred = ["main", "master", "develop", "dev", "staging", "release"];
   const out = [];
   const used = new Set();
+  const lowerToActual = new Map();
+  for (const n of names) {
+    if (n) lowerToActual.set(String(n).toLowerCase(), n);
+  }
   for (const p of preferred) {
-    if (names.includes(p) && !used.has(p)) {
-      out.push(p);
-      used.add(p);
+    const actual = lowerToActual.get(p.toLowerCase());
+    if (actual && !used.has(actual)) {
+      out.push(actual);
+      used.add(actual);
     }
   }
   for (const n of names) {
@@ -97,6 +107,37 @@ function prioritizeBranchNames(names, max) {
     }
   }
   return out;
+}
+
+/**
+ * Paginate GitHub /branches — single page was missing branches when scan cap cut off alphabetically before names like "Rishov".
+ */
+async function listAllBranchNames(owner, repo, headers, cap = MAX_BRANCH_NAMES_LIST) {
+  const limit = Math.min(Math.max(cap, 1), 1000);
+  const names = [];
+  let page = 1;
+  while (names.length < limit) {
+    try {
+      const { data } = await axios.get(
+        `${GITHUB_API}/repos/${owner}/${repo}/branches`,
+        {
+          headers,
+          params: { per_page: 100, page },
+          timeout: 15000,
+        }
+      );
+      if (!Array.isArray(data) || !data.length) break;
+      for (const b of data) {
+        if (b?.name && names.length < limit) names.push(b.name);
+      }
+      if (data.length < 100) break;
+      page += 1;
+    } catch (e) {
+      if (e.response?.status === 404 || e.response?.status === 403) return [];
+      throw e;
+    }
+  }
+  return names;
 }
 
 /**
@@ -114,7 +155,7 @@ async function fetchCommitsForAuthorAcrossBranches(
   const accountEmails = options.accountEmails || [];
   const maxBranches = Math.min(
     Number(options.maxBranches) || MAX_BRANCHES_DEFAULT,
-    50
+    300
   );
   const maxPages = Math.min(Number(options.maxPagesPerBranch) || MAX_PAGES_PER_BRANCH, 10);
   const headers = githubHeaders();
@@ -154,15 +195,7 @@ async function fetchCommitsForAuthorAcrossBranches(
 
   let branchNames = [];
   try {
-    const { data } = await axios.get(
-      `${GITHUB_API}/repos/${owner}/${repo}/branches`,
-      {
-        headers,
-        params: { per_page: 100, page: 1 },
-        timeout: 15000,
-      }
-    );
-    const raw = Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+    const raw = await listAllBranchNames(owner, repo, headers);
     branchNames = prioritizeBranchNames(raw, maxBranches);
   } catch (e) {
     if (e.response?.status !== 404 && e.response?.status !== 403) {
@@ -188,8 +221,8 @@ async function fetchCommitsForAuthorAcrossBranches(
  */
 async function fetchRecentCommitsAcrossBranches(owner, repo, sinceIso, options = {}) {
   const maxBranches = Math.min(
-    Number(options.maxBranches) || 12,
-    30
+    Number(options.maxBranches) || 80,
+    150
   );
   const maxPages = Math.min(Number(options.maxPagesPerBranch) || 2, 5);
   const headers = githubHeaders();
@@ -224,15 +257,7 @@ async function fetchRecentCommitsAcrossBranches(owner, repo, sinceIso, options =
 
   let branchNames = [];
   try {
-    const { data } = await axios.get(
-      `${GITHUB_API}/repos/${owner}/${repo}/branches`,
-      {
-        headers,
-        params: { per_page: 100, page: 1 },
-        timeout: 15000,
-      }
-    );
-    const raw = Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+    const raw = await listAllBranchNames(owner, repo, headers);
     branchNames = prioritizeBranchNames(raw, maxBranches);
   } catch {
     branchNames = [];

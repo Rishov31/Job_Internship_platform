@@ -117,6 +117,7 @@ app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 app.use("/api/startups", require("./src/routes/startupRoutes"));
 app.use("/api/contributions", require("./src/routes/contributionRoutes"));
 app.use("/api/rewards", require("./src/routes/rewardRoutes"));
+app.use("/api/mentorship-requests", require("./src/routes/mentorshipRequestRoutes"));
 app.use("/api/investor", require("./src/routes/investorRoutes"));
 
 app.get("/", (req, res) => {

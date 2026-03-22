@@ -43,6 +43,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       maxlength: 500,
     },
+    /** Available balance for investments (INR). Server-side only for transfers. */
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     isVerified: {
       type: Boolean,
       default: false,

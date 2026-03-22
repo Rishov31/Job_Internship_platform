@@ -14,6 +14,8 @@ import StudentDashboard from "./pages/Dashboard/StudentDashboard";
 import StudentStartupExplorer from "./pages/Dashboard/StudentStartupExplorer";
 import StudentContributions from "./pages/Dashboard/StudentContributions";
 import StudentAnalytics from "./pages/Dashboard/StudentAnalytics";
+import StudentMentorship from "./pages/Dashboard/StudentMentorship";
+import StudentResources from "./pages/Dashboard/StudentResources";
 import StartupDashboard from "./pages/Dashboard/StartupDashboard";
 import StartupProfile from "./pages/Dashboard/StartupProfile";
 
@@ -67,7 +69,10 @@ export default function App() {
         <Route path="dashboard" element={<StudentDashboard />} />
         <Route path="explore" element={<StudentStartupExplorer />} />
         <Route path="contributions" element={<StudentContributions />} />
+        <Route path="mentorship" element={<StudentMentorship />} />
         <Route path="analytics" element={<StudentAnalytics />} />
+        <Route path="resources" element={<StudentResources />} />
+        <Route path="resources/:id" element={<ResourceDetails />} />
       </Route>
 
       {/* Jobseeker Routes (job & internship sub‑module) */}
@@ -93,6 +98,10 @@ export default function App() {
       <Route path="/jobseeker/mentoring" element={<MentorshipList />} />
       <Route path="/jobseeker/mentor-chats" element={<JobSeekerMentorChats />} />
       <Route path="/jobseeker/video-call" element={<JobSeekerVideoCall />} />
+      <Route path="/startup/mentor-chats" element={<JobSeekerMentorChats />} />
+      <Route path="/startup/video-call" element={<JobSeekerVideoCall />} />
+      <Route path="/investor/mentor-chats" element={<JobSeekerMentorChats />} />
+      <Route path="/investor/video-call" element={<JobSeekerVideoCall />} />
 
       {/* Mentor Routes */}
       <Route path="/mentor/dashboard" element={<MentorDashboard />} />

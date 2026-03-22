@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import ContributionGithubChart from "../../components/ContributionGithubChart";
+import StartupPointsLineChart from "../../components/StartupPointsLineChart";
 // import NotificationBell from "../../components/NotificationBell";
 
 // This dashboard is a higher-level student view.
@@ -9,6 +10,40 @@ import ContributionGithubChart from "../../components/ContributionGithubChart";
 function authHeader() {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Last N months: points awarded per month (from startup approvals) + running cumulative */
+function buildMonthlyStartupPointsSeries(contributions, monthsBack = 6) {
+  const now = new Date();
+  const buckets = [];
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    buckets.push({
+      key,
+      month: d.toLocaleString("default", { month: "short" }),
+      points: 0,
+    });
+  }
+
+  const approved = (contributions || []).filter(
+    (c) => c.status === "approved" && (Number(c.pointsAwarded) || 0) > 0
+  );
+
+  for (const c of approved) {
+    const raw = c.updatedAt || c.createdAt;
+    if (!raw) continue;
+    const dt = new Date(raw);
+    const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = buckets.find((b) => b.key === key);
+    if (bucket) bucket.points += Number(c.pointsAwarded) || 0;
+  }
+
+  let run = 0;
+  return buckets.map(({ month, points, key }) => {
+    run += points;
+    return { month, points, cumulative: run, key };
+  });
 }
 
 function studentDisplayName(profile, authUser) {
@@ -35,7 +70,14 @@ export default function StudentDashboard() {
   const [startupCards, setStartupCards] = useState([]);
   const [ghActivity, setGhActivity] = useState(null);
   const [ghLoading, setGhLoading] = useState(true);
+  /** null until first load of /contributions/student/me */
+  const [contributions, setContributions] = useState(null);
   const navigate = useNavigate();
+
+  const startupPointsChartData = useMemo(
+    () => buildMonthlyStartupPointsSeries(contributions || []),
+    [contributions]
+  );
 
   useEffect(() => {
     if (!authUser?.id) return;
@@ -105,16 +147,28 @@ export default function StudentDashboard() {
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
-          if (cancelled || !data?.summary) return;
-          setCollaborations(data.summary.collaborationCount || 0);
-          setApprovedContributions(data.summary.approvedCount || 0);
-          if (data.summary.totalPoints != null) {
-            setContributionScore((prev) =>
-              Math.max(prev, data.summary.totalPoints)
-            );
+          if (cancelled) return;
+          // Always resolve chart loading (was stuck: contributions never set)
+          if (!data) {
+            setContributions([]);
+            return;
+          }
+          setContributions(
+            Array.isArray(data.contributions) ? data.contributions : []
+          );
+          if (data.summary) {
+            setCollaborations(data.summary.collaborationCount || 0);
+            setApprovedContributions(data.summary.approvedCount || 0);
+            if (data.summary.totalPoints != null) {
+              setContributionScore((prev) =>
+                Math.max(prev, data.summary.totalPoints)
+              );
+            }
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!cancelled) setContributions([]);
+        });
 
       fetch(`${API_BASE}/contributions/github/activity`, {
         headers,
@@ -209,12 +263,28 @@ export default function StudentDashboard() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => navigate("/jobseeker/profile")}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 hover:bg-slate-800"
-                >
-                  {completion.isProfileComplete ? "Edit profile" : "Complete profile"}
-                </button>
+                <div className="flex flex-col items-end gap-2">
+                  <button
+                    onClick={() => navigate("/jobseeker/profile")}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 hover:bg-slate-800"
+                  >
+                    {completion.isProfileComplete ? "Edit profile" : "Complete profile"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/mentorship")}
+                    className="text-[11px] font-medium text-sky-300 hover:text-sky-200"
+                  >
+                    Mentorship (founders & investors) →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/resources")}
+                    className="text-[11px] font-medium text-emerald-300 hover:text-emerald-200"
+                  >
+                    Career guidance resources →
+                  </button>
+                </div>
               </div>
 
               {/* Skills row */}
@@ -520,16 +590,14 @@ export default function StudentDashboard() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-3">
-                Track your skill growth and startup collaborations.
+                Running total of points awarded by startups when your contributions
+                are approved (last 6 months).
               </p>
-              <div className="h-24 rounded-xl bg-gradient-to-br from-slate-900 to-indigo-700/40 border border-dashed border-slate-700 px-3 flex items-end gap-1 text-[11px] text-slate-400">
-                {[15, 30, 20, 35, 45, 55].map((h, idx) => (
-                  <div
-                    key={idx}
-                    className="flex-1 rounded-full bg-gradient-to-t from-slate-500 to-sky-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
+              <div className="rounded-xl bg-slate-950/50 border border-slate-700/80 px-1 pt-1 pb-0">
+                <StartupPointsLineChart
+                  data={startupPointsChartData}
+                  loading={contributions === null}
+                />
               </div>
             </section>
 

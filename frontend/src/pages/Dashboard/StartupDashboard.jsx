@@ -1,8 +1,19 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 // import NotificationBell from "../../components/NotificationBell";
 import { me, logoutUser } from "../../api/authApi";
 import { getJobStats, getEmployerJobs } from "../../api/jobApi";
+
+const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
 
 // High-level startup founder dashboard – employer job module stays as sub‑module.
 
@@ -16,6 +27,7 @@ export default function StartupDashboard() {
     openPositions: 0,
   });
   const [startup, setStartup] = useState(null);
+  const [growthPoints, setGrowthPoints] = useState([]);
   const [profileCompletion, setProfileCompletion] = useState({
     completionPercentage: 0,
     isProfileComplete: false,
@@ -23,6 +35,7 @@ export default function StartupDashboard() {
   const [jobCards, setJobCards] = useState([]);
   const [ghSummary, setGhSummary] = useState(null);
   const [rewardClaims, setRewardClaims] = useState([]);
+  const [mentorshipRequests, setMentorshipRequests] = useState([]);
   const [ghContributor, setGhContributor] = useState(null);
   const [awarding, setAwarding] = useState(false);
   const navigate = useNavigate();
@@ -36,12 +49,31 @@ export default function StartupDashboard() {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const fetchGrowthSeries = useCallback(async (startupId) => {
+    if (!startupId) {
+      setGrowthPoints([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/startups/${startupId}/growth`, {
+        credentials: "include",
+      });
+      const data = res.ok ? await res.json() : [];
+      setGrowthPoints(Array.isArray(data) ? data : []);
+    } catch {
+      setGrowthPoints([]);
+    }
+  }, []);
+
   const recomputeStatsFromStartup = (s, prev) => {
     if (!s) return prev || stats;
+    const invCount = Array.isArray(s.investors)
+      ? s.investors.length
+      : s.totalInvestors || 0;
     return {
       ...(prev || stats),
       totalCapitalCr: (s.capitalRaised || 0) / 1_00_00_000,
-      totalInvestors: s.totalInvestors || 0,
+      totalInvestors: invCount,
       contributors: s.contributorsCount || 0,
       activeProjects: s.activeProjects || 0,
     };
@@ -57,7 +89,7 @@ export default function StartupDashboard() {
     }
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/startups/me/funding", {
+      const res = await fetch(`${API_BASE}/startups/me/funding`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -93,7 +125,7 @@ export default function StartupDashboard() {
     );
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/startups/me/repos", {
+      const res = await fetch(`${API_BASE}/startups/me/repos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -158,19 +190,23 @@ export default function StartupDashboard() {
 
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [jobStats, employerJobs, startupRes, ghRes, claimsRes] =
+        const [jobStats, employerJobs, startupRes, ghRes, claimsRes, mentRes] =
           await Promise.all([
             getJobStats().catch(() => null),
             getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
-            fetch(`/api/startups/me`, {
+            fetch(`${API_BASE}/startups/me`, {
               credentials: "include",
               headers: authHeaders,
             }).then((r) => (r.ok ? r.json() : null)),
-            fetch(`/api/startups/me/github/summary`, {
+            fetch(`${API_BASE}/startups/me/github/summary`, {
               credentials: "include",
               headers: authHeaders,
             }).then((r) => (r.ok ? r.json() : null)),
-            fetch(`/api/rewards/startup/me`, {
+            fetch(`${API_BASE}/rewards/startup/me`, {
+              credentials: "include",
+              headers: authHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+            fetch(`${API_BASE}/mentorship-requests/for-provider`, {
               credentials: "include",
               headers: authHeaders,
             }).then((r) => (r.ok ? r.json() : null)),
@@ -178,6 +214,7 @@ export default function StartupDashboard() {
 
         if (ghRes) setGhSummary(ghRes);
         if (claimsRes?.claims) setRewardClaims(claimsRes.claims);
+        if (mentRes?.requests) setMentorshipRequests(mentRes.requests);
 
         if (startupRes?.completion) {
           setProfileCompletion(startupRes.completion);
@@ -188,10 +225,13 @@ export default function StartupDashboard() {
           setStats((prev) => ({
             ...prev,
             totalCapitalCr: (s.capitalRaised || 0) / 1_00_00_000, // rough INR->Cr
-            totalInvestors: s.totalInvestors || 0,
+            totalInvestors: Array.isArray(s.investors)
+              ? s.investors.length
+              : s.totalInvestors || 0,
             contributors: s.contributorsCount || 0,
             activeProjects: s.activeProjects || 0,
           }));
+          await fetchGrowthSeries(s._id);
         }
 
         if (jobStats) {
@@ -206,7 +246,44 @@ export default function StartupDashboard() {
       }
     };
     fetchData();
-  }, [navigate]);
+  }, [navigate, fetchGrowthSeries]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible" || !startup?._id) return;
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      fetch(`${API_BASE}/startups/me`, {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data?.startup) return;
+          const s = data.startup;
+          setStartup(s);
+          setStats((prev) => recomputeStatsFromStartup(s, prev));
+          fetchGrowthSeries(s._id);
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [startup?._id, fetchGrowthSeries]);
+
+  const targetFundingInr = startup?.targetFunding ?? 100_000_000;
+  const targetFundingCr = targetFundingInr / 1_00_00_000;
+  const fundingProgressPct = Math.min(
+    100,
+    ((startup?.capitalRaised || 0) / targetFundingInr) * 100
+  );
+  const growthChartData = growthPoints.map((g) => ({
+    date: new Date(g.date).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    }),
+    capitalCr: (g.capital || 0) / 1_00_00_000,
+  }));
 
   const handleLogout = async () => {
     try {
@@ -286,6 +363,71 @@ export default function StartupDashboard() {
     } catch {
       window.alert("Network error");
     }
+  };
+
+  const refreshMentorshipRequests = async () => {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE}/mentorship-requests/for-provider`, {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const data = res.ok ? await res.json() : { requests: [] };
+    setMentorshipRequests(data.requests || []);
+  };
+
+  const proposeStartupMentorship = async (reqId) => {
+    const start = window.prompt(
+      "Proposed start (ISO 8601), e.g. 2026-03-26T15:00:00.000Z",
+      new Date(Date.now() + 864e5).toISOString()
+    );
+    if (!start) return;
+    const minutes = parseInt(
+      window.prompt("Session length (minutes)", "30") || "30",
+      10
+    );
+    const pricePerMinute = parseFloat(
+      window.prompt("Price per minute (INR)", "100") || "0"
+    );
+    const token = localStorage.getItem("token");
+    const res = await fetch(
+      `${API_BASE}/mentorship-requests/${reqId}/propose-slot`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ startTime: start, minutes, pricePerMinute }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      window.alert(data.message || "Failed to propose slot");
+      return;
+    }
+    window.alert("Slot sent. Student can pay under Student → Mentorship.");
+    refreshMentorshipRequests();
+  };
+
+  const rejectStartupMentorship = async (reqId) => {
+    const note = window.prompt("Optional note for the student", "") || "";
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE}/mentorship-requests/${reqId}/reject`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+      body: JSON.stringify({ note }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      window.alert(data.message || "Failed");
+      return;
+    }
+    refreshMentorshipRequests();
   };
 
   return (
@@ -472,25 +614,31 @@ export default function StartupDashboard() {
                   </p>
                 </div>
               </div>
-              <div className="h-28 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-400">
-                {startup?.capitalHistory && startup.capitalHistory.length > 0 ? (
-                  <div className="w-full h-full flex items-end gap-1 px-3 pb-2">
-                    {startup.capitalHistory.slice(-8).map((entry, idx) => (
-                      <div
-                        key={`${entry.date}-${idx}`}
-                        className="flex-1 rounded-full bg-gradient-to-t from-sky-400 to-indigo-300"
-                        style={{
-                          height: `${Math.min(
-                            100,
-                            (entry.amount / (startup.capitalRaised || 1)) * 100 +
-                              15
-                          )}%`,
-                        }}
+              <div className="h-28 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 text-[11px] text-slate-400 overflow-hidden p-2">
+                {growthChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={growthChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 9 }} />
+                      <YAxis tick={{ fill: "#94a3b8", fontSize: 9 }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                        formatter={(v) => [`₹${Number(v).toFixed(2)}Cr`, "Capital raised"]}
                       />
-                    ))}
-                  </div>
+                      <Line
+                        type="monotone"
+                        dataKey="capitalCr"
+                        stroke="#38bdf8"
+                        strokeWidth={2}
+                        dot={{ r: 2 }}
+                        name="Capital (Cr)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <>Capital / growth graph placeholder.</>
+                  <div className="h-full flex items-center justify-center">
+                    Capital / growth history appears after funding or investment.
+                  </div>
                 )}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-[11px]">
@@ -525,14 +673,25 @@ export default function StartupDashboard() {
                   Funding & Capital
                 </p>
                 <span className="text-[11px] text-emerald-400 font-medium">
-                  Target ₹10Cr
+                  Target ₹{targetFundingCr.toFixed(0)}Cr
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-3">
                 Track your round progress and raise new capital.
               </p>
-              <div className="h-20 rounded-xl bg-gradient-to-br from-emerald-400/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-300">
-                ₹{stats.totalCapitalCr.toFixed(2)}Cr raised so far.
+              <div className="rounded-xl bg-gradient-to-br from-emerald-400/20 to-slate-900 border border-dashed border-slate-700 p-3 text-[11px] text-slate-300">
+                <div className="flex justify-between mb-2">
+                  <span>₹{stats.totalCapitalCr.toFixed(2)}Cr raised</span>
+                  <span className="text-emerald-400 font-semibold">
+                    {fundingProgressPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500"
+                    style={{ width: `${fundingProgressPct}%` }}
+                  />
+                </div>
               </div>
               <button
                 onClick={handleRaiseFunding}
@@ -767,13 +926,85 @@ export default function StartupDashboard() {
             </div>
           </section>
 
+          {/* Student mentorship (requests + slot / pricing) */}
+          <section
+            ref={mentorshipRef}
+            className="mb-6 rounded-2xl border border-indigo-500/30 bg-slate-900/70 p-5 backdrop-blur scroll-mt-24"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-100">
+                  Student mentorship requests
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Propose time, duration, and ₹/min. After the student pays (demo), chat and video unlock.
+                </p>
+              </div>
+              <Link
+                to="/startup/mentor-chats"
+                className="text-[11px] text-sky-300 font-medium shrink-0"
+              >
+                Mentor chats →
+              </Link>
+            </div>
+            {mentorshipRequests.length === 0 ? (
+              <p className="text-[11px] text-slate-500">No mentorship requests yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {mentorshipRequests.map((mr) => (
+                  <li
+                    key={mr._id}
+                    className="rounded-xl border border-slate-700 bg-slate-800/40 px-3 py-2 text-[11px]"
+                  >
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-slate-100 font-medium">
+                        {mr.student?.fullName || "Student"}{" "}
+                        <span className="text-slate-500 font-normal">
+                          · {mr.student?.email}
+                        </span>
+                      </span>
+                      <span className="text-sky-300 capitalize">{mr.status}</span>
+                    </div>
+                    {mr.message && (
+                      <p className="text-slate-400 mt-1 line-clamp-2">{mr.message}</p>
+                    )}
+                    {mr.status === "slot_proposed" && (
+                      <p className="text-amber-200/90 mt-1">
+                        Awaiting payment ·{" "}
+                        {mr.proposedStartTime
+                          ? new Date(mr.proposedStartTime).toLocaleString()
+                          : ""}{" "}
+                        · {mr.proposedMinutes}m · ₹{mr.totalAmount} total
+                      </p>
+                    )}
+                    {mr.status === "pending" && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => proposeStartupMentorship(mr._id)}
+                          className="px-3 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+                        >
+                          Propose slot & pricing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rejectStartupMentorship(mr._id)}
+                          className="px-3 py-1 rounded-lg border border-slate-600 text-slate-300 hover:bg-slate-800"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           {/* Bottom row: Mentorship & Investor connect style cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mentorship & Guidance */}
-            <section
-              ref={mentorshipRef}
-              className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5"
-            >
+            <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-slate-700">
                   Mentorship & Guidance

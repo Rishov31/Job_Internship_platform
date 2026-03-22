@@ -69,7 +69,13 @@ exports.register = async (req, res, next) => {
     if (existing) return res.status(409).json({ message: "Email already in use" });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await User.create({ fullName, email, passwordHash, role });
+    const user = await User.create({
+      fullName,
+      email,
+      passwordHash,
+      role,
+      ...(role === "investor" && { walletBalance: 50_00_000 }),
+    });
 
     try {
       await seedRoleProfiles(user, { fullName, companyName });
@@ -103,6 +109,10 @@ exports.login = async (req, res, next) => {
 
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ message: "Invalid credentials" });
+
+    if (user.role === "investor" && (user.walletBalance == null || Number.isNaN(user.walletBalance))) {
+      user.walletBalance = 50_00_000;
+    }
 
     user.lastLoginAt = new Date();
     await user.save();
@@ -157,6 +167,9 @@ exports.me = async (req, res, next) => {
       isAdmin: user.isAdmin,
       githubUsername:
         normalizeGithubUsernameInput(user.githubUsername || "") || "",
+      ...(user.role === "investor" && {
+        walletBalance: user.walletBalance ?? 0,
+      }),
     });
   } catch (err) {
     next(err);

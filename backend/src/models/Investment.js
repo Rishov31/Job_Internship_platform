@@ -21,6 +21,14 @@ const investmentSchema = new mongoose.Schema(
       enum: ["pending", "confirmed", "cancelled"],
       default: "confirmed",
     },
+    /** Optional client key so retries do not double-charge */
+    idempotencyKey: {
+      type: String,
+      trim: true,
+      sparse: true,
+      unique: true,
+      index: true,
+    },
   },
   { timestamps: true }
 );

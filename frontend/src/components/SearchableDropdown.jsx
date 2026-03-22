@@ -5,8 +5,11 @@ export default function SearchableDropdown({
   value, 
   placeholder = "Select or type to search...",
   label,
-  onSelect
+  onSelect,
+  /** @type {"light"|"dark"} */
+  variant = "light",
 }) {
+  const isDark = variant === "dark";
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredOptions, setFilteredOptions] = useState(options);
@@ -73,10 +76,30 @@ export default function SearchableDropdown({
     }
   };
 
+  const labelCls = isDark
+    ? "block text-sm font-medium text-slate-400 mb-2"
+    : "block text-sm font-medium text-gray-700 mb-2";
+  const inputCls = isDark
+    ? "w-full rounded-lg border border-slate-600 bg-slate-900/80 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500/60 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+    : "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+  const chevronCls = isDark
+    ? "text-slate-500 hover:text-slate-300"
+    : "text-gray-400 hover:text-gray-600";
+  const menuCls = isDark
+    ? "absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-slate-600 bg-slate-900 shadow-xl"
+    : "absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto";
+  const itemCls = isDark
+    ? "cursor-pointer border-b border-slate-700/80 px-4 py-2 text-sm text-slate-200 last:border-b-0 hover:bg-slate-800"
+    : "px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-b-0";
+  const emptyCls = isDark
+    ? "absolute z-50 mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 shadow-xl"
+    : "absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg";
+  const emptyTextCls = isDark ? "px-4 py-2 text-sm text-slate-500" : "px-4 py-2 text-sm text-gray-500";
+
   return (
     <div className="relative" ref={dropdownRef}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className={labelCls}>
           {label}
         </label>
       )}
@@ -89,12 +112,12 @@ export default function SearchableDropdown({
           onFocus={handleInputFocus}
           onKeyDown={handleInputKeyDown}
           placeholder={placeholder}
-          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          className={inputCls}
         />
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          className={`absolute right-2 top-1/2 -translate-y-1/2 transform ${chevronCls}`}
         >
           <svg
             className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -108,12 +131,12 @@ export default function SearchableDropdown({
       </div>
       
       {isOpen && filteredOptions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+        <div className={menuCls}>
           {filteredOptions.map((option, index) => (
             <div
               key={index}
               onClick={() => handleSelect(option)}
-              className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-b-0"
+              className={itemCls}
             >
               {option}
             </div>
@@ -122,8 +145,8 @@ export default function SearchableDropdown({
       )}
       
       {isOpen && filteredOptions.length === 0 && searchTerm.trim() !== '' && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-          <div className="px-4 py-2 text-sm text-gray-500">
+        <div className={emptyCls}>
+          <div className={emptyTextCls}>
             No options found
           </div>
         </div>

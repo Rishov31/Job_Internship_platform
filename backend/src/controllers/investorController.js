@@ -1,6 +1,8 @@
+const mongoose = require("mongoose");
 const Startup = require("../models/Startup");
 const Investment = require("../models/Investment");
 const InvestorProfile = require("../models/InvestorProfile");
+const User = require("../models/User");
 
 function calcInvestorCompletion(p) {
   if (!p) return 0;
@@ -51,59 +53,74 @@ exports.upsertInvestorProfile = async (req, res, next) => {
   }
 };
 
+function portfolioItemFromInvestment(inv, startup) {
+  const valuation = Number(startup?.valuation);
+  const shares = Number(inv.sharePercent) || 0;
+  const invested = Number(inv.amount) || 0;
+  const currentValue =
+    Number.isFinite(valuation) && valuation > 0
+      ? (shares / 100) * valuation
+      : invested;
+  const roiPercent =
+    invested > 0 ? ((currentValue - invested) / invested) * 100 : 0;
+  return {
+    id: inv._id,
+    startupId: startup?._id,
+    startupName: startup?.name,
+    industry: startup?.industry,
+    invested,
+    currentValue,
+    roiPercent: Math.round(roiPercent * 100) / 100,
+    sharesPercent: shares,
+  };
+}
+
 // Overview for investor dashboard: discovery + portfolio stats
 exports.getOverview = async (req, res, next) => {
   try {
     const investorId = req.user.id;
 
-    // Portfolio
-    const investments = await Investment.find({ investor: investorId })
-      .populate("startup", "name industry capitalRaised")
-      .sort({ createdAt: -1 });
+    const [investorUser, investments] = await Promise.all([
+      User.findById(investorId).select("walletBalance"),
+      Investment.find({ investor: investorId })
+        .populate("startup", "name industry capitalRaised valuation")
+        .sort({ createdAt: -1 }),
+    ]);
 
     const totalInvestment = investments.reduce(
-      (sum, inv) => sum + (inv.amount || 0),
+      (sum, inv) => sum + (Number(inv.amount) || 0),
       0
     );
 
-    // For demo, treat current value as capitalRaised proportionally
-    const portfolio = investments.map((inv) => {
-      const startup = inv.startup || {};
-      const currentValue =
-        inv.sharePercent && startup.capitalRaised
-          ? (startup.capitalRaised * inv.sharePercent) / 100
-          : inv.amount;
-      const growth =
-        inv.amount > 0 ? Math.round(((currentValue - inv.amount) / inv.amount) * 100) : 0;
-      return {
-        id: inv._id,
-        startupId: startup._id,
-        startupName: startup.name,
-        industry: startup.industry,
-        invested: inv.amount,
-        currentValue,
-        growthPercent: growth,
-      };
-    });
+    const portfolio = investments.map((inv) =>
+      portfolioItemFromInvestment(inv, inv.startup || {})
+    );
 
     const totalCurrentValue = portfolio.reduce(
       (sum, p) => sum + (p.currentValue || 0),
       0
     );
 
-    // Discovery list: top startups by capitalRaised
+    let portfolioRoiPercent = 0;
+    if (totalInvestment > 0) {
+      portfolioRoiPercent =
+        ((totalCurrentValue - totalInvestment) / totalInvestment) * 100;
+    }
+
     const discoveryStartups = await Startup.find({})
       .sort({ capitalRaised: -1 })
       .limit(5)
-      .select("name industry stage capitalRaised contributorsCount");
+      .select("name industry stage capitalRaised contributorsCount valuation targetFunding");
 
     res.json({
+      walletBalance: investorUser?.walletBalance ?? 0,
       discovery: {
         startups: discoveryStartups,
       },
       portfolio: {
         totalInvestment,
         totalCurrentValue,
+        portfolioRoiPercent: Math.round(portfolioRoiPercent * 100) / 100,
         items: portfolio,
       },
     });
@@ -112,34 +129,138 @@ exports.getOverview = async (req, res, next) => {
   }
 };
 
-// Create a new investment and update startup capital
-exports.createInvestment = async (req, res, next) => {
+/**
+ * Atomic investment: wallet debit, Investment doc, startup capital + investors + growthHistory.
+ * Uses a MongoDB multi-document transaction (requires replica set).
+ */
+exports.confirmInvestment = async (req, res, next) => {
+  const { startupId, amount, idempotencyKey } = req.body || {};
+  const numericAmount = Number(amount);
+
   try {
-    const { startupId, amount, sharePercent } = req.body;
-    if (!startupId || !amount) {
-      return res.status(400).json({ message: "startupId and amount are required" });
+    if (!startupId || !mongoose.isValidObjectId(startupId)) {
+      return res.status(400).json({ message: "Valid startupId is required" });
+    }
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ message: "amount must be a positive number" });
     }
 
-    const startup = await Startup.findById(startupId);
-    if (!startup) {
-      return res.status(404).json({ message: "Startup not found" });
+    const key =
+      typeof idempotencyKey === "string" && idempotencyKey.trim()
+        ? idempotencyKey.trim().slice(0, 128)
+        : null;
+
+    if (key) {
+      const existing = await Investment.findOne({ idempotencyKey: key }).populate(
+        "startup"
+      );
+      if (existing && existing.investor.equals(req.user.id)) {
+        const u = await User.findById(req.user.id).select("walletBalance");
+        return res.json({
+          duplicate: true,
+          investment: existing,
+          walletBalance: u?.walletBalance ?? 0,
+          startup: existing.startup,
+        });
+      }
     }
 
-    const investment = await Investment.create({
-      investor: req.user.id,
-      startup: startupId,
-      amount,
-      sharePercent: sharePercent || 0,
-      status: "confirmed",
-    });
+    let session;
+    let responsePayload;
 
-    // Update startup capital & investor count (very simplified)
-    startup.capitalRaised = (startup.capitalRaised || 0) + amount;
-    startup.capitalHistory.push({ amount });
-    startup.totalInvestors = (startup.totalInvestors || 0) + 1;
-    await startup.save();
+    try {
+      session = await mongoose.startSession();
+      session.startTransaction();
 
-    res.status(201).json({ investment });
+      const startup = await Startup.findById(startupId).session(session);
+      if (!startup) {
+        const err = new Error("Startup not found");
+        err.status = 404;
+        throw err;
+      }
+
+      let valuation = Number(startup.valuation);
+      if (!Number.isFinite(valuation) || valuation <= 0) {
+        valuation = 150_000;
+        startup.valuation = valuation;
+      }
+
+      const shares = (numericAmount / valuation) * 100;
+      const shareRounded = Math.round(shares * 10000) / 10000;
+
+      const investorDoc = await User.findOneAndUpdate(
+        { _id: req.user.id, walletBalance: { $gte: numericAmount } },
+        { $inc: { walletBalance: -numericAmount } },
+        { new: true, session }
+      );
+      if (!investorDoc) {
+        const err = new Error("Insufficient wallet balance");
+        err.status = 400;
+        throw err;
+      }
+
+      const [investment] = await Investment.create(
+        [
+          {
+            investor: req.user.id,
+            startup: startupId,
+            amount: numericAmount,
+            sharePercent: shareRounded,
+            status: "confirmed",
+            ...(key ? { idempotencyKey: key } : {}),
+          },
+        ],
+        { session }
+      );
+
+      const newCapital = (startup.capitalRaised || 0) + numericAmount;
+      startup.capitalRaised = newCapital;
+      startup.capitalHistory.push({ amount: numericAmount });
+      startup.growthHistory.push({ date: new Date(), capital: newCapital });
+      const invId = req.user.id;
+      if (!startup.investors.some((id) => id.equals(invId))) {
+        startup.investors.push(invId);
+      }
+      startup.totalInvestors = startup.investors.length;
+      await startup.save({ session });
+
+      await session.commitTransaction();
+
+      responsePayload = {
+        investment,
+        walletBalance: investorDoc.walletBalance,
+        startup,
+      };
+    } catch (inner) {
+      if (session) {
+        try {
+          await session.abortTransaction();
+        } catch (_) {
+          // ignore if no transaction to abort
+        }
+      }
+      const dupCode = inner.code === 11000 || inner.code === "11000";
+      if (dupCode && key) {
+        const dup = await Investment.findOne({ idempotencyKey: key }).populate("startup");
+        if (dup && dup.investor.equals(req.user.id)) {
+          const u = await User.findById(req.user.id).select("walletBalance");
+          return res.json({
+            duplicate: true,
+            investment: dup,
+            walletBalance: u?.walletBalance ?? 0,
+            startup: dup.startup,
+          });
+        }
+      }
+      if (inner.status) {
+        return res.status(inner.status).json({ message: inner.message });
+      }
+      return next(inner);
+    } finally {
+      if (session) session.endSession();
+    }
+
+    return res.status(201).json(responsePayload);
   } catch (e) {
     next(e);
   }
@@ -150,11 +271,10 @@ exports.getPortfolio = async (req, res, next) => {
   try {
     const investorId = req.user.id;
     const investments = await Investment.find({ investor: investorId })
-      .populate("startup", "name industry capitalRaised")
+      .populate("startup", "name industry capitalRaised valuation")
       .sort({ createdAt: -1 });
     res.json({ investments });
   } catch (e) {
     next(e);
   }
 };
-

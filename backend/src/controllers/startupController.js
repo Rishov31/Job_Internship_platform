@@ -12,6 +12,8 @@ const STARTUP_UPSERT_FIELDS = [
   "activeProjects",
   "openPositions",
   "contributorsCount",
+  "valuation",
+  "targetFunding",
 ];
 
 function calcStartupCompletion(s) {
@@ -117,6 +119,21 @@ exports.getStartupOverview = async (req, res, next) => {
   }
 };
 
+/** Growth series for charts: [{ date, capital }] */
+exports.getStartupGrowth = async (req, res, next) => {
+  try {
+    const startup = await Startup.findById(req.params.id).select("growthHistory");
+    if (!startup) return res.status(404).json({ message: "Startup not found" });
+    const points = (startup.growthHistory || []).map((g) => ({
+      date: g.date,
+      capital: g.capital,
+    }));
+    res.json(points);
+  } catch (e) {
+    next(e);
+  }
+};
+
 // For Student / Investor: browse startups with simple filters
 exports.exploreStartups = async (req, res, next) => {
   try {
@@ -153,8 +170,10 @@ exports.raiseFunding = async (req, res, next) => {
       });
     }
 
-    startup.capitalRaised = (startup.capitalRaised || 0) + numericAmount;
+    const newCapital = (startup.capitalRaised || 0) + numericAmount;
+    startup.capitalRaised = newCapital;
     startup.capitalHistory.push({ amount: numericAmount });
+    startup.growthHistory.push({ date: new Date(), capital: newCapital });
     await startup.save();
 
     res.json({ startup });

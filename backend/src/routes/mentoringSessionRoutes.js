@@ -15,11 +15,19 @@ router.patch("/:sessionId/payment", requireRole("jobseeker"), ctrl.updatePayment
 // Get my sessions (jobseeker)
 router.get("/me", requireRole("jobseeker"), ctrl.getMySessions);
 
-// Get my sessions as mentor
-router.get("/me/mentor", requireRole("mentor"), ctrl.getMySessionsAsMentor);
+// Get my sessions as mentor / founder / investor (mentorUser match)
+router.get(
+  "/me/mentor",
+  requireRole("mentor", "employer", "investor"),
+  ctrl.getMySessionsAsMentor
+);
 
 // Get session by ID
-router.get("/:sessionId", requireRole("jobseeker", "mentor"), ctrl.getSessionById);
+router.get(
+  "/:sessionId",
+  requireRole("jobseeker", "mentor", "employer", "investor"),
+  ctrl.getSessionById
+);
 
 module.exports = router;
 

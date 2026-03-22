@@ -1,15 +1,33 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { me, logoutUser } from "../../api/authApi";
 // import NotificationBell from "../../components/NotificationBell";
+
+const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
 
 export default function InvestorDashboard() {
   const [authUser, setAuthUser] = useState(null);
   const [investorProfile, setInvestorProfile] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [totalPortfolio, setTotalPortfolio] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
+  const [portfolioRoiPercent, setPortfolioRoiPercent] = useState(0);
   const [discovery, setDiscovery] = useState([]);
   const [portfolioItems, setPortfolioItems] = useState([]);
+  const [selectedStartupId, setSelectedStartupId] = useState("");
+  const [investAmount, setInvestAmount] = useState("20000");
+  const [investLoading, setInvestLoading] = useState(false);
+  const [investError, setInvestError] = useState("");
+  const [mentorshipRequests, setMentorshipRequests] = useState([]);
   const [profileForm, setProfileForm] = useState({
     firmName: "",
     bio: "",
@@ -28,6 +46,31 @@ export default function InvestorDashboard() {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const loadOverview = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const headers = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    try {
+      const res = await fetch(`${API_BASE}/investor/overview`, {
+        headers,
+        credentials: "include",
+      });
+      const data = res.ok ? await res.json() : null;
+      if (!data) return;
+      setDiscovery(data.discovery?.startups || []);
+      setWalletBalance(data.walletBalance ?? 0);
+      const p = data.portfolio || {};
+      setTotalPortfolio((p.totalInvestment || 0) / 1_00_00_000);
+      setTotalValue((p.totalCurrentValue || 0) / 1_00_00_000);
+      setPortfolioRoiPercent(Number(p.portfolioRoiPercent) || 0);
+      setPortfolioItems(p.items || []);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (!investorProfile) return;
     setProfileForm({
@@ -39,7 +82,6 @@ export default function InvestorDashboard() {
 
   useEffect(() => {
     let cancelled = false;
-    const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
 
     (async () => {
       const token = localStorage.getItem("token");
@@ -60,6 +102,9 @@ export default function InvestorDashboard() {
         return;
       }
       setAuthUser(user);
+      if (typeof user.walletBalance === "number") {
+        setWalletBalance(user.walletBalance);
+      }
       try {
         localStorage.setItem(
           "user",
@@ -80,20 +125,7 @@ export default function InvestorDashboard() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       };
 
-      fetch(`${API_BASE}/investor/overview`, {
-        headers,
-        credentials: "include",
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data) => {
-          if (!data || cancelled) return;
-          setDiscovery(data.discovery?.startups || []);
-          const p = data.portfolio || {};
-          setTotalPortfolio((p.totalInvestment || 0) / 1_00_00_000);
-          setTotalValue((p.totalCurrentValue || 0) / 1_00_00_000);
-          setPortfolioItems(p.items || []);
-        })
-        .catch(() => {});
+      await loadOverview();
 
       fetch(`${API_BASE}/investor/profile`, {
         headers,
@@ -105,12 +137,84 @@ export default function InvestorDashboard() {
           setInvestorProfile(data);
         })
         .catch(() => {});
+
+      fetch(`${API_BASE}/mentorship-requests/for-provider`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : { requests: [] }))
+        .then((data) => {
+          if (cancelled) return;
+          setMentorshipRequests(data.requests || []);
+        })
+        .catch(() => {});
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, loadOverview]);
+
+  useEffect(() => {
+    if (!discovery.length) return;
+    setSelectedStartupId((prev) => {
+      if (prev && discovery.some((s) => s._id === prev)) return prev;
+      return discovery[0]._id;
+    });
+  }, [discovery]);
+
+  const selectedStartup = discovery.find((s) => s._id === selectedStartupId);
+  const valuationNum = Number(selectedStartup?.valuation) || 150_000;
+  const investAmtNum = Number(String(investAmount).replace(/,/g, "")) || 0;
+  const estimatedShare =
+    valuationNum > 0 && investAmtNum > 0
+      ? (investAmtNum / valuationNum) * 100
+      : 0;
+
+  const handleConfirmInvest = async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !selectedStartupId) return;
+    setInvestLoading(true);
+    setInvestError("");
+    try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const res = await fetch(`${API_BASE}/investor/invest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          startupId: selectedStartupId,
+          amount: investAmtNum,
+          idempotencyKey,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInvestError(data.message || "Investment failed");
+        return;
+      }
+      await loadOverview();
+      if (typeof data.walletBalance === "number") {
+        setWalletBalance(data.walletBalance);
+      }
+    } catch {
+      setInvestError("Network error. Please try again.");
+    } finally {
+      setInvestLoading(false);
+    }
+  };
+
+  const chartData = portfolioItems.map((item, i) => ({
+    name: (item.startupName || `S${i + 1}`).slice(0, 12),
+    invested: (item.invested || 0) / 1_00_000,
+    value: (item.currentValue || 0) / 1_00_000,
+  }));
 
   const handleLogout = async () => {
     try {
@@ -138,7 +242,7 @@ export default function InvestorDashboard() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const res = await fetch("/api/investor/profile", {
+      const res = await fetch(`${API_BASE}/investor/profile`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -158,6 +262,71 @@ export default function InvestorDashboard() {
     } finally {
       setSavingProfile(false);
     }
+  };
+
+  const refreshInvestorMentorship = async () => {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE}/mentorship-requests/for-provider`, {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const data = res.ok ? await res.json() : { requests: [] };
+    setMentorshipRequests(data.requests || []);
+  };
+
+  const proposeInvestorMentorship = async (reqId) => {
+    const start = window.prompt(
+      "Proposed start (ISO 8601)",
+      new Date(Date.now() + 864e5).toISOString()
+    );
+    if (!start) return;
+    const minutes = parseInt(
+      window.prompt("Session length (minutes)", "30") || "30",
+      10
+    );
+    const pricePerMinute = parseFloat(
+      window.prompt("Price per minute (INR)", "150") || "0"
+    );
+    const token = localStorage.getItem("token");
+    const res = await fetch(
+      `${API_BASE}/mentorship-requests/${reqId}/propose-slot`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ startTime: start, minutes, pricePerMinute }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      window.alert(data.message || "Failed");
+      return;
+    }
+    window.alert("Slot sent to the student.");
+    refreshInvestorMentorship();
+  };
+
+  const rejectInvestorMentorship = async (reqId) => {
+    const note = window.prompt("Optional note", "") || "";
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE}/mentorship-requests/${reqId}/reject`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+      body: JSON.stringify({ note }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      window.alert(data.message || "Failed");
+      return;
+    }
+    refreshInvestorMentorship();
   };
 
   return (
@@ -288,6 +457,12 @@ export default function InvestorDashboard() {
             {/* Notifications temporarily disabled */}
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
+                <p className="text-xs text-slate-400">Wallet</p>
+                <p className="text-sm font-semibold text-emerald-300">
+                  ₹{(walletBalance / 1_00_000).toFixed(2)}L
+                </p>
+              </div>
+              <div className="text-right">
                 <p className="text-xs text-slate-400">Investor</p>
                 <p className="text-sm font-medium text-slate-100">
                   {investorProfile?.firmName || authUser?.fullName || "…"}
@@ -397,12 +572,37 @@ export default function InvestorDashboard() {
                     Portfolio revenue, growth and simulated ROI.
                   </p>
                 </div>
-                <span className="inline-flex text-[11px] px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-300 font-medium border border-emerald-500/40">
-                  ROI +133%
+                <span
+                  className={`inline-flex text-[11px] px-2 py-1 rounded-full font-medium border ${
+                    portfolioRoiPercent >= 0
+                      ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/40"
+                      : "bg-rose-500/10 text-rose-300 border-rose-500/40"
+                  }`}
+                >
+                  ROI {portfolioRoiPercent >= 0 ? "+" : ""}
+                  {portfolioRoiPercent.toFixed(1)}%
                 </span>
               </div>
-              <div className="h-40 mb-3 rounded-xl bg-gradient-to-b from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-xs text-slate-400">
-                Growth graph placeholder – plug your chart library here.
+              <div className="h-40 mb-3 rounded-xl bg-gradient-to-b from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 text-xs text-slate-400 overflow-hidden p-2">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="name" tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                      <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                        formatter={(v) => [`₹${Number(v).toFixed(2)}L`, ""]}
+                      />
+                      <Line type="monotone" dataKey="value" stroke="#34d399" strokeWidth={2} dot={false} name="Current (L)" />
+                      <Line type="monotone" dataKey="invested" stroke="#38bdf8" strokeWidth={2} dot={false} name="Invested (L)" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center">
+                    Invest to see portfolio value vs. invested (₹L).
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3 text-[11px]">
                 <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700">
@@ -442,12 +642,20 @@ export default function InvestorDashboard() {
               <div className="space-y-3 text-[11px]">
                 <label className="block text-slate-600">
                   Select startup
-                  <select className="mt-1 w-full text-xs rounded-lg border border-slate-700 px-2 py-1.5 bg-slate-900/80 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400">
-                    {discovery.map((s) => (
-                      <option key={s._id} value={s._id}>
-                        {s.name} • {s.stage || "pre-seed"}
-                      </option>
-                    ))}
+                  <select
+                    value={selectedStartupId}
+                    onChange={(e) => setSelectedStartupId(e.target.value)}
+                    className="mt-1 w-full text-xs rounded-lg border border-slate-700 px-2 py-1.5 bg-slate-900/80 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
+                  >
+                    {discovery.length === 0 ? (
+                      <option value="">No startups yet</option>
+                    ) : (
+                      discovery.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.name} • {s.stage || "pre-seed"}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </label>
 
@@ -457,8 +665,12 @@ export default function InvestorDashboard() {
                     <span className="text-xs text-slate-400 mr-1">₹</span>
                     <input
                       type="number"
-                      className="flex-1 bg-transparent outline-none text-xs text-slate-900"
-                      placeholder="20,000"
+                      min={1}
+                      step={1}
+                      value={investAmount}
+                      onChange={(e) => setInvestAmount(e.target.value)}
+                      className="flex-1 bg-transparent outline-none text-xs text-slate-100"
+                      placeholder="20000"
                     />
                     <span className="text-[11px] text-slate-400 ml-1">INR</span>
                   </div>
@@ -466,15 +678,99 @@ export default function InvestorDashboard() {
 
                 <div className="flex items-center justify-between text-[11px] text-slate-300">
                   <span>Estimated share</span>
-                  <span className="font-semibold text-emerald-600">13.3%</span>
+                  <span className="font-semibold text-emerald-400">
+                    {estimatedShare > 0 ? `${estimatedShare.toFixed(2)}%` : "—"}
+                  </span>
                 </div>
 
-                <button className="w-full mt-2 py-2 rounded-lg bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600">
-                  Confirm Investment
+                {investError ? (
+                  <p className="text-[11px] text-rose-400">{investError}</p>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={handleConfirmInvest}
+                  disabled={
+                    investLoading ||
+                    !selectedStartupId ||
+                    !investAmtNum ||
+                    investAmtNum <= 0
+                  }
+                  className="w-full mt-2 py-2 rounded-lg bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {investLoading ? "Processing…" : "Confirm Investment"}
                 </button>
               </div>
             </section>
           </div>
+
+          {/* Mentorship requests from students */}
+          <section className="mb-6 rounded-2xl border border-violet-500/30 bg-slate-900/70 p-5 backdrop-blur">
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Student mentorship requests
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Same flow as founders: propose slot & rate, then student pays to unlock chat/video.
+                </p>
+              </div>
+              <Link
+                to="/investor/mentor-chats"
+                className="text-[11px] text-sky-300 font-medium shrink-0"
+              >
+                Mentor chats →
+              </Link>
+            </div>
+            {mentorshipRequests.length === 0 ? (
+              <p className="text-[11px] text-slate-500">No requests yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {mentorshipRequests.map((mr) => (
+                  <li
+                    key={mr._id}
+                    className="rounded-xl border border-slate-700 bg-slate-800/40 px-3 py-2 text-[11px]"
+                  >
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <span className="text-slate-100 font-medium">
+                        {mr.student?.fullName}{" "}
+                        <span className="text-slate-500 font-normal">
+                          {mr.student?.email}
+                        </span>
+                      </span>
+                      <span className="text-violet-300 capitalize">{mr.status}</span>
+                    </div>
+                    {mr.message && (
+                      <p className="text-slate-400 mt-1 line-clamp-2">{mr.message}</p>
+                    )}
+                    {mr.status === "slot_proposed" && (
+                      <p className="text-amber-200/90 mt-1">
+                        Awaiting student payment · ₹{mr.totalAmount} total
+                      </p>
+                    )}
+                    {mr.status === "pending" && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => proposeInvestorMentorship(mr._id)}
+                          className="px-3 py-1 rounded-lg bg-violet-600 text-white hover:bg-violet-500"
+                        >
+                          Propose slot & pricing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rejectInvestorMentorship(mr._id)}
+                          className="px-3 py-1 rounded-lg border border-slate-600 text-slate-300"
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {/* Investor profile (stored in DB) */}
           <section className="mb-6 bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
@@ -574,12 +870,12 @@ export default function InvestorDashboard() {
                     <th className="py-2 pr-4">Startup</th>
                     <th className="py-2 px-4">Invested</th>
                     <th className="py-2 px-4">Current Value</th>
-                    <th className="py-2 px-4">Growth</th>
+                    <th className="py-2 px-4">ROI</th>
                   </tr>
                 </thead>
                 <tbody>
                   {portfolioItems.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-800">
+                    <tr key={String(item.id)} className="border-b border-slate-800">
                       <td className="py-2 pr-4">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-md bg-slate-900 text-white text-[10px] flex items-center justify-center">
@@ -601,9 +897,13 @@ export default function InvestorDashboard() {
                       <td className="py-2 px-4 text-slate-200">
                         ₹{(item.currentValue / 1_00_000).toFixed(1)}L
                       </td>
-                      <td className="py-2 px-4 font-semibold text-emerald-400">
-                        {item.growthPercent >= 0 ? "+" : ""}
-                        {item.growthPercent}%
+                      <td
+                        className={`py-2 px-4 font-semibold ${
+                          (item.roiPercent ?? 0) >= 0 ? "text-emerald-400" : "text-rose-400"
+                        }`}
+                      >
+                        {(item.roiPercent ?? 0) >= 0 ? "+" : ""}
+                        {Number(item.roiPercent ?? 0).toFixed(1)}%
                       </td>
                     </tr>
                   ))}

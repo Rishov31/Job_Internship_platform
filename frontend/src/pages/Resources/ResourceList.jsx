@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getAllResources } from "../../api/resourceApi";
+import {
+  RESOURCE_CATEGORIES,
+  RESOURCE_TYPES,
+  getCategoryLabel,
+  getTypeBadgeClass,
+} from "./resourceConstants";
 
 export default function ResourceList() {
   const [resources, setResources] = useState([]);
@@ -35,60 +41,6 @@ export default function ResourceList() {
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const categories = [
-    { value: "", label: "All Categories" },
-    { value: "career-planning", label: "Career Planning" },
-    { value: "interview-tips", label: "Interview Tips" },
-    { value: "resume-writing", label: "Resume Writing" },
-    { value: "job-search", label: "Job Search" },
-    { value: "skill-development", label: "Skill Development" },
-    { value: "networking", label: "Networking" },
-    { value: "workplace-ethics", label: "Workplace Ethics" },
-    { value: "leadership", label: "Leadership" },
-    { value: "other", label: "Other" },
-  ];
-
-  const types = [
-    { value: "", label: "All Types" },
-    { value: "article", label: "Articles" },
-    { value: "video", label: "Videos" },
-    { value: "blog", label: "Blogs" },
-  ];
-
-  const getTypeIcon = (type) => {
-    switch (type) {
-      case "video":
-        return (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m6-7a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        );
-      case "blog":
-        return (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        );
-      default:
-        return (
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-        );
-    }
-  };
-
-  const getTypeColor = (type) => {
-    switch (type) {
-      case "video":
-        return "bg-red-100 text-red-800";
-      case "blog":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-blue-100 text-blue-800";
-    }
   };
 
   if (loading) {
@@ -135,7 +87,7 @@ export default function ResourceList() {
                 onChange={(e) => handleFilterChange("type", e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               >
-                {types.map((type) => (
+                {RESOURCE_TYPES.map((type) => (
                   <option key={type.value} value={type.value}>
                     {type.label}
                   </option>
@@ -150,7 +102,7 @@ export default function ResourceList() {
                 onChange={(e) => handleFilterChange("category", e.target.value)}
                 className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               >
-                {categories.map((category) => (
+                {RESOURCE_CATEGORIES.map((category) => (
                   <option key={category.value} value={category.value}>
                     {category.label}
                   </option>
@@ -196,7 +148,7 @@ export default function ResourceList() {
                 
                 <div className="p-6">
                   <div className="flex items-center justify-between mb-3">
-                    <span className={`px-2 py-1 text-xs rounded-full ${getTypeColor(resource.type)}`}>
+                    <span className={`px-2 py-1 text-xs rounded-full ${getTypeBadgeClass(resource.type, "light")}`}>
                       {resource.type}
                     </span>
                     {resource.featured && (
@@ -215,7 +167,7 @@ export default function ResourceList() {
                   </p>
                   
                   <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                    <span>{categories.find(cat => cat.value === resource.category)?.label || resource.category}</span>
+                    <span>{getCategoryLabel(resource.category)}</span>
                     <div className="flex items-center space-x-2">
                       <span>{resource.viewCount || 0} views</span>
                       {resource.likes > 0 && (

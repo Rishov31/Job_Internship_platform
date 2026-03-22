@@ -1,9 +1,30 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getMyChatRooms, getMessages, sendMessage } from "../../api/mentorApi";
-import NotificationBell from "../../components/NotificationBell";
+import { getMentorNavBase } from "../../utils/mentorNavBase";
+
+/** API may return { id } or { user: { _id } } */
+function extractUserId(data) {
+  if (!data) return null;
+  if (data.id != null) return String(data.id);
+  if (data._id != null) return String(data._id);
+  if (data.user) {
+    const u = data.user;
+    if (u._id != null) return String(u._id);
+    if (u.id != null) return String(u.id);
+  }
+  return null;
+}
+
+function userIdFromRef(ref) {
+  if (ref == null) return "";
+  if (typeof ref === "string" || typeof ref === "number") return String(ref);
+  if (ref._id != null) return String(ref._id);
+  return String(ref);
+}
 
 export default function JobSeekerMentorChats() {
+  const navBase = getMentorNavBase();
   const [chatRooms, setChatRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -12,23 +33,75 @@ export default function JobSeekerMentorChats() {
   const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
 
+  const getOtherUser = useCallback(
+    (room) => {
+      if (!room) return null;
+      const jid = userIdFromRef(room.jobseeker);
+      const mid = userIdFromRef(room.mentor);
+      const uid = currentUserId ? String(currentUserId) : "";
+      if (!uid) {
+        return room.jobseeker || room.mentor;
+      }
+      if (jid && jid === uid) return room.mentor;
+      if (mid && mid === uid) return room.jobseeker;
+      return room.jobseeker || room.mentor;
+    },
+    [currentUserId]
+  );
+
+  /** True when logged-in user is the mentor side of the room (founder / platform mentor / investor) */
+  const isMentorSide = useCallback(
+    (room) => {
+      if (!room || !currentUserId) return false;
+      return userIdFromRef(room.mentor) === String(currentUserId);
+    },
+    [currentUserId]
+  );
+
+  const myUnreadKey = useCallback(
+    (room) => {
+      if (!room || !currentUserId) return 0;
+      return isMentorSide(room) ? room.unreadCountMentor : room.unreadCountJobseeker;
+    },
+    [currentUserId, isMentorSide]
+  );
+
   useEffect(() => {
-    // Get current user
     const token = localStorage.getItem("token");
-    fetch("/api/users/me", { headers: { Authorization: `Bearer ${token}` }})
-      .then(r => r.json())
-      .then(data => {
-        if (data.user?._id) setCurrentUserId(data.user._id);
-      })
-      .catch(() => {});
-    
-    fetchChatRooms();
+    if (!token) return;
+
+    (async () => {
+      try {
+        setLoading(true);
+        let id = null;
+        const meRes = await fetch("/api/users/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meRes.ok) {
+          id = extractUserId(await meRes.json());
+        }
+        if (!id) {
+          const authRes = await fetch("/api/auth/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (authRes.ok) id = extractUserId(await authRes.json());
+        }
+        if (id) setCurrentUserId(id);
+
+        const data = await getMyChatRooms();
+        setChatRooms(data.chatRooms || []);
+        if (data.chatRooms?.length) setSelectedRoom(data.chatRooms[0]);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
     if (selectedRoom) {
       fetchMessages(selectedRoom._id);
-      // Poll for new messages every 3 seconds
       const interval = setInterval(() => {
         fetchMessages(selectedRoom._id);
       }, 3000);
@@ -37,12 +110,11 @@ export default function JobSeekerMentorChats() {
   }, [selectedRoom]);
 
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const fetchChatRooms = async () => {
     try {
-      setLoading(true);
       const data = await getMyChatRooms();
       setChatRooms(data.chatRooms || []);
       if (data.chatRooms && data.chatRooms.length > 0 && !selectedRoom) {
@@ -50,8 +122,6 @@ export default function JobSeekerMentorChats() {
       }
     } catch (e) {
       console.error("Failed to fetch chat rooms:", e);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -71,94 +141,102 @@ export default function JobSeekerMentorChats() {
     try {
       await sendMessage(selectedRoom._id, newMessage);
       setNewMessage("");
-      // Refresh messages
       await fetchMessages(selectedRoom._id);
-      // Refresh chat rooms to update last message
       await fetchChatRooms();
-    } catch (e) {
-      alert(e.message || "Failed to send message");
+    } catch (err) {
+      alert(err.message || "Failed to send message");
     }
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  const getOtherUser = (room) => {
-    if (!currentUserId) return room.mentor || room.jobseeker;
-    // If current user is jobseeker, show mentor; otherwise show jobseeker
-    if (room.jobseeker?._id === currentUserId || room.jobseeker === currentUserId) {
-      return room.mentor;
-    }
-    return room.jobseeker;
   };
 
   const formatTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const senderId = (msg) => {
+    const s = msg.sender;
+    if (!s) return "";
+    if (typeof s === "string" || typeof s === "number") return String(s);
+    return String(s._id || s.id || "");
+  };
+
+  const isMyMessage = (msg) => {
+    if (!currentUserId) return false;
+    return senderId(msg) === String(currentUserId);
   };
 
   if (loading) {
     return (
-      <div className="flex min-h-screen bg-gray-50 items-center justify-center">
-        <div>Loading...</div>
+      <div className="flex min-h-screen bg-[#050818] items-center justify-center text-slate-400 text-sm">
+        Loading chats…
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      {/* Chat Rooms List - Left Sidebar */}
-      <div className="w-80 bg-white border-r flex flex-col">
-        <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold">Mentor Chats</h2>
+    <div className="flex min-h-screen bg-[#050818] text-slate-100">
+      {/* Rooms list */}
+      <div className="w-80 md:w-96 flex flex-col border-r border-slate-800/80 bg-[#050818]">
+        <div className="p-4 border-b border-slate-800/80">
+          <h2 className="text-sm font-semibold text-slate-50 tracking-tight">Mentor chats</h2>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {currentUserId ? "Conversations" : "Loading profile…"}
+          </p>
         </div>
         <div className="flex-1 overflow-y-auto">
           {chatRooms.length === 0 ? (
-            <div className="p-4 text-center text-gray-500">
-              No chat rooms yet. Book a mentoring session to start chatting.
+            <div className="p-6 text-center text-[11px] text-slate-500">
+              No conversations yet. Book a session and complete payment to open chat.
             </div>
           ) : (
-            <div className="divide-y">
+            <div className="divide-y divide-slate-800/80">
               {chatRooms.map((room) => {
                 const otherUser = getOtherUser(room);
                 const isSelected = selectedRoom?._id === room._id;
+                const unread = myUnreadKey(room);
                 return (
                   <button
                     key={room._id}
+                    type="button"
                     onClick={() => setSelectedRoom(room)}
-                    className={`w-full p-4 text-left hover:bg-gray-50 transition ${
-                      isSelected ? "bg-blue-50 border-l-4 border-blue-600" : ""
+                    className={`w-full p-4 text-left transition ${
+                      isSelected
+                        ? "bg-slate-900/90 border-l-4 border-sky-500"
+                        : "hover:bg-slate-900/60 border-l-4 border-transparent"
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-sky-600 flex items-center justify-center flex-shrink-0 text-sm font-semibold text-white shadow-lg shadow-sky-500/20">
                         {otherUser?.avatarUrl ? (
-                          <img src={otherUser.avatarUrl} alt={otherUser.fullName} className="w-full h-full rounded-full object-cover" />
+                          <img
+                            src={otherUser.avatarUrl}
+                            alt=""
+                            className="w-full h-full rounded-full object-cover"
+                          />
                         ) : (
-                          <span className="text-gray-600 font-medium">
-                            {otherUser?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                          <span>
+                            {(otherUser?.fullName || "?").charAt(0).toUpperCase()}
                           </span>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 truncate">
+                        <div className="font-medium text-slate-100 text-sm truncate">
                           {otherUser?.fullName || "Unknown"}
                         </div>
                         {room.lastMessage && (
-                          <div className="text-sm text-gray-500 truncate mt-1">
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">
                             {room.lastMessage.content}
                           </div>
                         )}
                         {room.lastMessageAt && (
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="text-[10px] text-slate-600 mt-1">
                             {formatTime(room.lastMessageAt)}
                           </div>
                         )}
                       </div>
-                      {(room.unreadCountJobseeker > 0 || room.unreadCountMentor > 0) && (
-                        <div className="bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0">
-                          {room.unreadCountJobseeker || room.unreadCountMentor}
+                      {unread > 0 && (
+                        <div className="bg-sky-500 text-white text-[10px] font-semibold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center flex-shrink-0">
+                          {unread}
                         </div>
                       )}
                     </div>
@@ -170,73 +248,73 @@ export default function JobSeekerMentorChats() {
         </div>
       </div>
 
-      {/* Chat Window - Right Side */}
-      <div className="flex-1 flex flex-col">
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#050818] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.08),transparent_50%)]">
         {selectedRoom ? (
           <>
-            {/* Chat Header */}
-            <div className="bg-white border-b p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center">
+            <div className="border-b border-slate-800/80 px-4 py-3 bg-slate-900/50 backdrop-blur shrink-0">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-sm font-semibold text-white shrink-0">
                     {getOtherUser(selectedRoom)?.avatarUrl ? (
-                      <img 
-                        src={getOtherUser(selectedRoom).avatarUrl} 
-                        alt={getOtherUser(selectedRoom).fullName} 
-                        className="w-full h-full rounded-full object-cover" 
+                      <img
+                        src={getOtherUser(selectedRoom).avatarUrl}
+                        alt=""
+                        className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
-                      <span className="text-gray-600 font-medium">
-                        {getOtherUser(selectedRoom)?.fullName?.charAt(0)?.toUpperCase() || "U"}
+                      <span>
+                        {(getOtherUser(selectedRoom)?.fullName || "?")
+                          .charAt(0)
+                          .toUpperCase()}
                       </span>
                     )}
                   </div>
-                  <div>
-                    <div className="font-medium">{getOtherUser(selectedRoom)?.fullName || "Unknown"}</div>
-                    <div className="text-sm text-gray-500">Mentor</div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-50 truncate text-sm">
+                      {getOtherUser(selectedRoom)?.fullName || "Unknown"}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {isMentorSide(selectedRoom) ? "Student" : "Mentor"}
+                    </div>
                   </div>
                 </div>
                 <Link
-                  to={`/jobseeker/video-call?room=${selectedRoom._id}`}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+                  to={`${navBase}/video-call?room=${selectedRoom._id}`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600/90 text-white text-xs font-semibold hover:bg-emerald-500 shrink-0 shadow-lg shadow-emerald-900/30"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
-                  <span>Video Call</span>
+                  Video
                 </Link>
               </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {messages.length === 0 ? (
-                <div className="text-center text-gray-500 mt-8">
-                  No messages yet. Start the conversation!
+                <div className="text-center text-[11px] text-slate-500 mt-12">
+                  No messages yet. Say hello below.
                 </div>
               ) : (
                 messages.map((msg) => {
-                  const isMyMessage = currentUserId && (
-                    msg.sender._id === currentUserId || 
-                    msg.sender === currentUserId ||
-                    (typeof msg.sender === 'object' && msg.sender._id === currentUserId)
-                  );
+                  const mine = isMyMessage(msg);
                   return (
                     <div
                       key={msg._id}
-                      className={`flex ${isMyMessage ? "justify-end" : "justify-start"}`}
+                      className={`flex w-full ${mine ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                          isMyMessage
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-900"
+                        className={`max-w-[85%] sm:max-w-md px-3 py-2 rounded-2xl text-sm ${
+                          mine
+                            ? "bg-gradient-to-br from-sky-600 to-indigo-600 text-white rounded-br-md shadow-lg shadow-sky-900/40"
+                            : "bg-slate-800/90 text-slate-100 border border-slate-700/80 rounded-bl-md"
                         }`}
                       >
-                        <div className="text-sm">{msg.content}</div>
+                        <div className="break-words">{msg.content}</div>
                         <div
-                          className={`text-xs mt-1 ${
-                            isMyMessage ? "text-blue-100" : "text-gray-500"
+                          className={`text-[10px] mt-1 ${
+                            mine ? "text-sky-100/80" : "text-slate-500"
                           }`}
                         >
                           {formatTime(msg.createdAt)}
@@ -249,19 +327,18 @@ export default function JobSeekerMentorChats() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input */}
-            <div className="bg-white border-t p-4">
+            <div className="border-t border-slate-800/80 p-3 bg-slate-900/80 shrink-0">
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Type a message…"
+                  className="flex-1 rounded-xl border border-slate-700 bg-slate-950/80 px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50"
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition"
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 text-white text-sm font-semibold hover:bg-sky-500 transition-colors shadow-lg shadow-sky-900/40"
                 >
                   Send
                 </button>
@@ -269,10 +346,9 @@ export default function JobSeekerMentorChats() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <div className="text-lg mb-2">Select a chat to start messaging</div>
-              <div className="text-sm">Book a mentoring session to create a chat room</div>
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center text-slate-500 text-sm max-w-xs">
+              Select a conversation or book a mentoring session to start.
             </div>
           </div>
         )}
@@ -280,5 +356,3 @@ export default function JobSeekerMentorChats() {
     </div>
   );
 }
-
-

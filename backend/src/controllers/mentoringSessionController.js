@@ -29,6 +29,7 @@ exports.createSession = async (req, res, next) => {
       pricePerMinuteAtBooking: mentor.pricePerMinute,
       totalAmount,
       status: "pending_payment",
+      sessionKind: "platform_mentor",
       notes,
       motivation,
     });
@@ -93,31 +94,33 @@ exports.updatePaymentStatus = async (req, res, next) => {
 exports.getMySessions = async (req, res, next) => {
   try {
     const sessions = await MentoringSession.find({ jobseeker: req.user.id })
-      .populate({ 
-        path: "mentor", 
-        populate: { path: "user", select: "fullName avatarUrl" } 
+      .populate({
+        path: "mentor",
+        populate: { path: "user", select: "fullName avatarUrl" },
       })
+      .populate("mentorUser", "fullName avatarUrl email")
+      .populate("providerStartup", "name industry")
       .sort({ createdAt: -1 });
-    
+
     res.json({ sessions });
   } catch (e) {
     next(e);
   }
 };
 
-// Get all sessions for a mentor
+/** Provider-side sessions (platform mentor, startup founder, investor) via mentorUser */
 exports.getMySessionsAsMentor = async (req, res, next) => {
   try {
-    const mentor = await Mentor.findOne({ user: req.user.id });
-    if (!mentor) {
-      return res.json({ sessions: [] });
-    }
-
-    const sessions = await MentoringSession.find({ mentor: mentor._id })
+    const sessions = await MentoringSession.find({ mentorUser: req.user.id })
       .populate("jobseeker", "fullName avatarUrl email phone")
       .populate("mentorUser", "fullName avatarUrl")
-      .sort({ createdAt: -1 });
-    
+      .populate({
+        path: "mentor",
+        populate: { path: "user", select: "fullName avatarUrl" },
+      })
+      .populate("providerStartup", "name industry")
+      .sort({ startTime: -1 });
+
     res.json({ sessions });
   } catch (e) {
     next(e);
@@ -129,12 +132,13 @@ exports.getSessionById = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
     const session = await MentoringSession.findById(sessionId)
-      .populate({ 
-        path: "mentor", 
-        populate: { path: "user", select: "fullName avatarUrl" } 
+      .populate({
+        path: "mentor",
+        populate: { path: "user", select: "fullName avatarUrl" },
       })
       .populate("jobseeker", "fullName avatarUrl")
-      .populate("mentorUser", "fullName avatarUrl");
+      .populate("mentorUser", "fullName avatarUrl")
+      .populate("providerStartup", "name industry");
 
     if (!session) {
       return res.status(404).json({ message: "Session not found" });

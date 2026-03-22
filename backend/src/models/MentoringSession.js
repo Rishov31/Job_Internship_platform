@@ -2,9 +2,21 @@ const mongoose = require("mongoose");
 
 const mentoringSessionSchema = new mongoose.Schema(
   {
-    mentor: { type: mongoose.Schema.Types.ObjectId, ref: "Mentor", required: true, index: true },
+    /** Platform mentor profile; omitted for startup founder / investor sessions */
+    mentor: { type: mongoose.Schema.Types.ObjectId, ref: "Mentor", index: true },
     mentorUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     jobseeker: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    sessionKind: {
+      type: String,
+      enum: ["platform_mentor", "startup_founder", "investor"],
+      default: "platform_mentor",
+      index: true,
+    },
+    providerStartup: { type: mongoose.Schema.Types.ObjectId, ref: "Startup" },
+    mentorshipRequest: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MentorshipRequest",
+    },
     startTime: { type: Date, required: true },
     minutes: { type: Number, required: true, min: 10, max: 240 },
     pricePerMinuteAtBooking: { type: Number, required: true, min: 0 },

@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const items = [
   { path: "/student/dashboard", label: "Dashboard", icon: "🏠" },
-  { path: "/jobseeker/dashboard", label: "Job & Internship Search", icon: "🔍" },
+  { path: "/jobseeker/jobs", label: "Job & Internship Search", icon: "🔍" },
   { path: "/student/explore", label: "Startup Explorer", icon: "🧪" },
+  { path: "/student/resources", label: "Career Resources", icon: "📚" },
+  { path: "/student/mentorship", label: "Mentorship", icon: "🎓" },
   { path: "/student/contributions", label: "Contributions & Rewards", icon: "🎖" },
   { path: "/student/analytics", label: "Analytics", icon: "📊" },
 ];
@@ -30,11 +32,14 @@ export default function StudentSidebar() {
       <nav className="flex-1 px-4 py-4 text-sm space-y-1">
         {items.map(({ path, label, icon }) => {
           const isJobseeker = path.startsWith("/jobseeker");
+          const isResources = path === "/student/resources";
           const active = isJobseeker
             ? location.pathname.startsWith("/jobseeker")
-            : location.pathname === path ||
-              (path === "/student/dashboard" &&
-                location.pathname === "/student");
+            : isResources
+              ? location.pathname.startsWith("/student/resources")
+              : location.pathname === path ||
+                (path === "/student/dashboard" &&
+                  location.pathname === "/student");
 
           return (
             <button

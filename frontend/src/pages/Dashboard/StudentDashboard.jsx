@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me, logoutUser } from "../../api/authApi";
+import ContributionGithubChart from "../../components/ContributionGithubChart";
 // import NotificationBell from "../../components/NotificationBell";
 
 // This dashboard is a higher-level student view.
@@ -32,6 +33,8 @@ export default function StudentDashboard() {
   const [approvedContributions, setApprovedContributions] = useState(0);
   const [contributionScore, setContributionScore] = useState(0);
   const [startupCards, setStartupCards] = useState([]);
+  const [ghActivity, setGhActivity] = useState(null);
+  const [ghLoading, setGhLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -67,6 +70,7 @@ export default function StudentDashboard() {
             email: user.email,
             role: user.role,
             isAdmin: user.isAdmin,
+            githubUsername: user.githubUsername || "",
           })
         );
         localStorage.setItem("role", user.role || "");
@@ -148,6 +152,22 @@ export default function StudentDashboard() {
           }
         })
         .catch(() => {});
+
+      fetch(`${API_BASE}/contributions/github/activity`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled) return;
+          setGhActivity(data);
+        })
+        .catch(() => {
+          if (!cancelled) setGhActivity(null);
+        })
+        .finally(() => {
+          if (!cancelled) setGhLoading(false);
+        });
     })();
 
     return () => {
@@ -400,26 +420,83 @@ export default function StudentDashboard() {
 
             {/* Contribution summary / analytics (right) */}
             <section className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2">
                 <p className="text-xs font-semibold text-slate-100">
                   Contribution Tracker
                 </p>
-                <span className="text-[11px] text-emerald-400 font-medium">
-                  {contributionScore > 0 ? `+${contributionScore} pts` : "0 pts"}
-                </span>
+                <div className="text-right">
+                  <span className="text-[11px] text-emerald-400 font-medium block">
+                    {contributionScore > 0 ? `+${contributionScore} pts` : "0 pts"}{" "}
+                    <span className="text-slate-500 font-normal">platform</span>
+                  </span>
+                  {ghActivity?.success && (
+                    <span className="text-[10px] text-sky-300 block">
+                      GitHub: {ghActivity.totalCommitsAndPRs ?? 0} commits/PRs (30d)
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="text-xs text-slate-400 mb-3">
-                Track your open‑source and startup contributions over time.
+              <p className="text-xs text-slate-400 mb-2">
+                Live GitHub activity on startup repos listed in Explorer (commits +
+                merged PRs).
               </p>
-              <div className="h-24 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-end gap-1 px-3 pb-2 text-[11px] text-slate-400">
-                {[10, 25, 40, 55, 45, 65, 80].map((h, idx) => (
-                  <div
-                    key={idx}
-                    className="flex-1 rounded-full bg-gradient-to-t from-sky-400 to-violet-300"
-                    style={{ height: `${h}%` }}
-                  />
-                ))}
+              {ghActivity?.needsGithubUsername && (
+                <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+                  Add your{" "}
+                  <span className="font-semibold">GitHub username</span> in your
+                  profile to load real graphs.
+                  <button
+                    type="button"
+                    onClick={() => navigate("/jobseeker/profile")}
+                    className="ml-2 text-sky-300 underline font-medium"
+                  >
+                    Open profile
+                  </button>
+                </div>
+              )}
+              {ghActivity?.githubError && (
+                <p className="mb-2 text-[11px] text-red-300">{ghActivity.message}</p>
+              )}
+              {ghActivity?.weeklyInsight?.message && ghActivity.success && (
+                <p className="mb-2 text-[11px] text-slate-300 leading-snug">
+                  {ghActivity.weeklyInsight.message}
+                </p>
+              )}
+              {ghActivity?.success && (
+                <div className="mb-2 flex flex-wrap gap-2 text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-600">
+                    🔥 {ghActivity.streak ?? 0}-day streak
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 border border-slate-600">
+                    GH level:{" "}
+                    <span className="text-amber-200 font-semibold">
+                      {ghActivity.level?.level || "Bronze"}
+                    </span>
+                  </span>
+                  {ghActivity.topStartup?.name && (
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 border border-indigo-500/40">
+                      Most active: {ghActivity.topStartup.name}
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="rounded-xl bg-gradient-to-br from-indigo-500/10 to-slate-900 border border-slate-700/80 px-1 pt-2 pb-1">
+                <ContributionGithubChart
+                  data={ghActivity?.chart || []}
+                  loading={ghLoading}
+                  emptyMessage={
+                    ghActivity?.needsGithubUsername
+                      ? "Connect GitHub to see daily bars."
+                      : ghActivity?.message ||
+                        "No activity in the last 14 days on tracked repos."
+                  }
+                />
               </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {ghActivity?.reposScanned != null && ghActivity.success
+                  ? `Scanning ${ghActivity.reposScanned} repo(s) from startups.`
+                  : ""}
+              </p>
               <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
                   <p className="text-slate-400">Startups</p>

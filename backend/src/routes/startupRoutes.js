@@ -11,6 +11,7 @@ router.get("/:id/overview", ctrl.getStartupOverview);
 // Authenticated founder routes
 router.use(auth);
 router.get("/me/completion", requireRole("employer"), ctrl.getStartupCompletion);
+router.get("/me/github/summary", requireRole("employer"), ctrl.getMyGithubSummary);
 router.get("/me", requireRole("employer"), ctrl.getMyStartup);
 router.post("/me", requireRole("employer"), ctrl.upsertMyStartup);
 router.post("/me/funding", requireRole("employer"), ctrl.raiseFunding);

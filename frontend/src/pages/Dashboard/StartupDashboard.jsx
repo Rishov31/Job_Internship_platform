@@ -21,6 +21,7 @@ export default function StartupDashboard() {
     isProfileComplete: false,
   });
   const [jobCards, setJobCards] = useState([]);
+  const [ghSummary, setGhSummary] = useState(null);
   const navigate = useNavigate();
 
   const recomputeStatsFromStartup = (s, prev) => {
@@ -145,14 +146,20 @@ export default function StartupDashboard() {
 
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [jobStats, employerJobs, startupRes] = await Promise.all([
+        const [jobStats, employerJobs, startupRes, ghRes] = await Promise.all([
           getJobStats().catch(() => null),
           getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
           fetch(`/api/startups/me`, {
             credentials: "include",
             headers: authHeaders,
           }).then((r) => (r.ok ? r.json() : null)),
+          fetch(`/api/startups/me/github/summary`, {
+            credentials: "include",
+            headers: authHeaders,
+          }).then((r) => (r.ok ? r.json() : null)),
         ]);
+
+        if (ghRes) setGhSummary(ghRes);
 
         if (startupRes?.completion) {
           setProfileCompletion(startupRes.completion);
@@ -521,6 +528,66 @@ export default function StartupDashboard() {
               </div>
             </section>
           </div>
+
+          {/* GitHub: recent contributors across linked repos (7d) */}
+          <section className="mb-6 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-100">
+                  Repo contributors (last 7 days)
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Commits on your linked GitHub repos (public). Set{" "}
+                  <code className="text-sky-300">GITHUB_TOKEN</code> on the server
+                  for reliable API limits.
+                </p>
+              </div>
+              {ghSummary?.recentTotal != null && (
+                <span className="text-[11px] text-emerald-400 font-semibold shrink-0">
+                  {ghSummary.recentTotal} commits
+                </span>
+              )}
+            </div>
+            {ghSummary?.repos?.length > 0 && (
+              <p className="text-[10px] text-slate-500 mb-3 break-all">
+                Tracking: {ghSummary.repos.join(" · ")}
+              </p>
+            )}
+            {!ghSummary?.repos?.length && (
+              <p className="text-[11px] text-slate-500 mb-3">
+                Link repositories from{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/startup/profile")}
+                  className="text-sky-400 underline"
+                >
+                  Company profile
+                </button>{" "}
+                or use &quot;Link Repository&quot; above.
+              </p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {(ghSummary?.topContributors || []).length === 0 ? (
+                <span className="text-[11px] text-slate-500">
+                  No recent commits fetched (add public repos or check API
+                  limits).
+                </span>
+              ) : (
+                ghSummary.topContributors.map((t) => (
+                  <span
+                    key={t.login}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-600 text-[11px] text-slate-200"
+                  >
+                    <span className="text-sky-300 font-mono">@{t.login}</span>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {t.count} commits
+                    </span>
+                  </span>
+                ))
+              )}
+            </div>
+          </section>
 
           {/* Bottom row: Mentorship & Investor connect style cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

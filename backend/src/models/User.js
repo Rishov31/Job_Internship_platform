@@ -51,6 +51,13 @@ const userSchema = new mongoose.Schema(
     lastLoginAt: {
       type: Date,
     },
+    /** GitHub login (no @) — used for live contribution analytics */
+    githubUsername: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      maxlength: 39,
+    },
   },
   { timestamps: true }
 );

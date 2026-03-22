@@ -29,6 +29,8 @@ export default function JobSeekerProfile() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
+  const [githubUsername, setGithubUsername] = useState("");
+  const [githubSaving, setGithubSaving] = useState(false);
   const resumeInputRef = useRef(null);
   const avatarInputRef = useRef(null);
   const backupRef = useRef(null);
@@ -52,7 +54,10 @@ export default function JobSeekerProfile() {
         else navigate("/");
         return;
       }
-      if (!cancelled) setAuthUser(user);
+      if (!cancelled) {
+        setAuthUser(user);
+        setGithubUsername(user.githubUsername || "");
+      }
 
       try {
         const r = await fetch("/api/jobseeker/profile", {
@@ -97,6 +102,48 @@ export default function JobSeekerProfile() {
     const ph = form?.personalInfo?.phone || "";
     if (ph && !/^\d{10}$/.test(ph)) e.phone = "Enter 10 digits";
     return e;
+  };
+
+  const saveGithubUsername = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setGithubSaving(true);
+    try {
+      const r = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          githubUsername: githubUsername
+            .trim()
+            .replace(/^@/, "")
+            .toLowerCase(),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        alert(data.message || "Could not save");
+        return;
+      }
+      setAuthUser((prev) => ({ ...prev, githubUsername: data.githubUsername }));
+      try {
+        const raw = localStorage.getItem("user");
+        const u = raw ? JSON.parse(raw) : {};
+        localStorage.setItem(
+          "user",
+          JSON.stringify({ ...u, githubUsername: data.githubUsername || "" })
+        );
+      } catch {
+        // ignore
+      }
+    } catch {
+      alert("Network error");
+    } finally {
+      setGithubSaving(false);
+    }
   };
 
   const save = async () => {
@@ -558,6 +605,33 @@ export default function JobSeekerProfile() {
                   }
                   placeholder="City"
                 />
+              </div>
+              <div className="md:col-span-2 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
+                <label className={lbl}>GitHub username</label>
+                <p className="text-[11px] text-slate-500 mb-2">
+                  Powers live commit/PR graphs on your student dashboard (no{" "}
+                  <code className="text-slate-400">@</code>). Must match your
+                  GitHub login.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <input
+                    className={inp}
+                    disabled={!editing}
+                    value={githubUsername}
+                    onChange={(e) =>
+                      setGithubUsername(e.target.value.replace(/^@/, ""))
+                    }
+                    placeholder="e.g. octocat"
+                  />
+                  <button
+                    type="button"
+                    disabled={!editing || githubSaving}
+                    onClick={saveGithubUsername}
+                    className="shrink-0 px-4 py-2.5 rounded-xl bg-sky-600 text-white text-sm font-medium hover:bg-sky-500 disabled:opacity-50"
+                  >
+                    {githubSaving ? "Saving…" : "Save GitHub"}
+                  </button>
+                </div>
               </div>
             </div>
           )}

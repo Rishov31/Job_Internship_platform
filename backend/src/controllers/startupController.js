@@ -40,6 +40,16 @@ function calcStartupCompletion(s) {
 
 exports.calcStartupCompletion = calcStartupCompletion;
 
+exports.getMyGithubSummary = async (req, res, next) => {
+  try {
+    const { getStartupRepoContributors } = require("../services/githubContributionService");
+    const data = await getStartupRepoContributors(req.user.id);
+    res.json(data);
+  } catch (e) {
+    next(e);
+  }
+};
+
 // Get or create startup profile for current founder (employer)
 exports.getMyStartup = async (req, res, next) => {
   try {

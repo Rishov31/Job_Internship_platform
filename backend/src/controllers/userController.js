@@ -4,7 +4,13 @@ exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ id: user._id, fullName: user.fullName, email: user.email, role: user.role });
+    res.json({
+      id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      githubUsername: user.githubUsername || "",
+    });
   } catch (e) {
     next(e);
   }
@@ -12,11 +18,27 @@ exports.getMe = async (req, res, next) => {
 
 exports.updateMe = async (req, res, next) => {
   try {
-    const allowed = ["fullName", "avatarUrl", "phone", "bio"];
+    const allowed = ["fullName", "avatarUrl", "phone", "bio", "githubUsername"];
     const updates = {};
     for (const key of allowed) if (key in req.body) updates[key] = req.body[key];
+    if (updates.githubUsername !== undefined) {
+      const g = String(updates.githubUsername || "")
+        .trim()
+        .replace(/^@/, "")
+        .toLowerCase();
+      updates.githubUsername = g || null;
+    }
     const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
-    res.json({ id: user._id, fullName: user.fullName, email: user.email, role: user.role, avatarUrl: user.avatarUrl, phone: user.phone, bio: user.bio });
+    res.json({
+      id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      avatarUrl: user.avatarUrl,
+      phone: user.phone,
+      bio: user.bio,
+      githubUsername: user.githubUsername || "",
+    });
   } catch (e) {
     next(e);
   }

@@ -79,7 +79,14 @@ exports.register = async (req, res, next) => {
     const token = createToken({ id: user._id, role: user.role, isAdmin: user.isAdmin });
     res.cookie("token", token, { httpOnly: true, sameSite: "lax" });
     return res.status(201).json({
-      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin },
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        githubUsername: user.githubUsername || "",
+      },
       token,
     });
   } catch (err) {
@@ -108,7 +115,14 @@ exports.login = async (req, res, next) => {
     const token = createToken({ id: user._id, role: user.role, isAdmin: user.isAdmin });
     res.cookie("token", token, { httpOnly: true, sameSite: "lax" });
     return res.json({
-      user: { id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin },
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        isAdmin: user.isAdmin,
+        githubUsername: user.githubUsername || "",
+      },
       token,
     });
   } catch (err) {
@@ -134,7 +148,14 @@ exports.me = async (req, res, next) => {
     }
     const user = await User.findById(decoded.id);
     if (!user) return res.status(404).json({ message: "User not found" });
-    return res.json({ id: user._id, fullName: user.fullName, email: user.email, role: user.role, isAdmin: user.isAdmin });
+    return res.json({
+      id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      isAdmin: user.isAdmin,
+      githubUsername: user.githubUsername || "",
+    });
   } catch (err) {
     next(err);
   }

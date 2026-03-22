@@ -1,8 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 // import NotificationBell from "../../components/NotificationBell";
 import { me, logoutUser } from "../../api/authApi";
 import { getJobStats, getEmployerJobs } from "../../api/jobApi";
+
+const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
 
 // High-level startup founder dashboard – employer job module stays as sub‑module.
 
@@ -16,6 +27,7 @@ export default function StartupDashboard() {
     openPositions: 0,
   });
   const [startup, setStartup] = useState(null);
+  const [growthPoints, setGrowthPoints] = useState([]);
   const [profileCompletion, setProfileCompletion] = useState({
     completionPercentage: 0,
     isProfileComplete: false,
@@ -23,12 +35,31 @@ export default function StartupDashboard() {
   const [jobCards, setJobCards] = useState([]);
   const navigate = useNavigate();
 
+  const fetchGrowthSeries = useCallback(async (startupId) => {
+    if (!startupId) {
+      setGrowthPoints([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/startups/${startupId}/growth`, {
+        credentials: "include",
+      });
+      const data = res.ok ? await res.json() : [];
+      setGrowthPoints(Array.isArray(data) ? data : []);
+    } catch {
+      setGrowthPoints([]);
+    }
+  }, []);
+
   const recomputeStatsFromStartup = (s, prev) => {
     if (!s) return prev || stats;
+    const invCount = Array.isArray(s.investors)
+      ? s.investors.length
+      : s.totalInvestors || 0;
     return {
       ...(prev || stats),
       totalCapitalCr: (s.capitalRaised || 0) / 1_00_00_000,
-      totalInvestors: s.totalInvestors || 0,
+      totalInvestors: invCount,
       contributors: s.contributorsCount || 0,
       activeProjects: s.activeProjects || 0,
     };
@@ -44,7 +75,7 @@ export default function StartupDashboard() {
     }
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/startups/me/funding", {
+      const res = await fetch(`${API_BASE}/startups/me/funding`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -80,7 +111,7 @@ export default function StartupDashboard() {
     );
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("/api/startups/me/repos", {
+      const res = await fetch(`${API_BASE}/startups/me/repos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -148,7 +179,7 @@ export default function StartupDashboard() {
         const [jobStats, employerJobs, startupRes] = await Promise.all([
           getJobStats().catch(() => null),
           getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
-          fetch(`/api/startups/me`, {
+          fetch(`${API_BASE}/startups/me`, {
             credentials: "include",
             headers: authHeaders,
           }).then((r) => (r.ok ? r.json() : null)),
@@ -163,10 +194,13 @@ export default function StartupDashboard() {
           setStats((prev) => ({
             ...prev,
             totalCapitalCr: (s.capitalRaised || 0) / 1_00_00_000, // rough INR->Cr
-            totalInvestors: s.totalInvestors || 0,
+            totalInvestors: Array.isArray(s.investors)
+              ? s.investors.length
+              : s.totalInvestors || 0,
             contributors: s.contributorsCount || 0,
             activeProjects: s.activeProjects || 0,
           }));
+          await fetchGrowthSeries(s._id);
         }
 
         if (jobStats) {
@@ -181,7 +215,44 @@ export default function StartupDashboard() {
       }
     };
     fetchData();
-  }, [navigate]);
+  }, [navigate, fetchGrowthSeries]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible" || !startup?._id) return;
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      fetch(`${API_BASE}/startups/me`, {
+        credentials: "include",
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data?.startup) return;
+          const s = data.startup;
+          setStartup(s);
+          setStats((prev) => recomputeStatsFromStartup(s, prev));
+          fetchGrowthSeries(s._id);
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [startup?._id, fetchGrowthSeries]);
+
+  const targetFundingInr = startup?.targetFunding ?? 100_000_000;
+  const targetFundingCr = targetFundingInr / 1_00_00_000;
+  const fundingProgressPct = Math.min(
+    100,
+    ((startup?.capitalRaised || 0) / targetFundingInr) * 100
+  );
+  const growthChartData = growthPoints.map((g) => ({
+    date: new Date(g.date).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    }),
+    capitalCr: (g.capital || 0) / 1_00_00_000,
+  }));
 
   const handleLogout = async () => {
     try {
@@ -366,25 +437,31 @@ export default function StartupDashboard() {
                   </p>
                 </div>
               </div>
-              <div className="h-28 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-400">
-                {startup?.capitalHistory && startup.capitalHistory.length > 0 ? (
-                  <div className="w-full h-full flex items-end gap-1 px-3 pb-2">
-                    {startup.capitalHistory.slice(-8).map((entry, idx) => (
-                      <div
-                        key={`${entry.date}-${idx}`}
-                        className="flex-1 rounded-full bg-gradient-to-t from-sky-400 to-indigo-300"
-                        style={{
-                          height: `${Math.min(
-                            100,
-                            (entry.amount / (startup.capitalRaised || 1)) * 100 +
-                              15
-                          )}%`,
-                        }}
+              <div className="h-28 rounded-xl bg-gradient-to-br from-indigo-500/20 to-slate-900 border border-dashed border-slate-700 text-[11px] text-slate-400 overflow-hidden p-2">
+                {growthChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={growthChartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 9 }} />
+                      <YAxis tick={{ fill: "#94a3b8", fontSize: 9 }} />
+                      <Tooltip
+                        contentStyle={{ background: "#0f172a", border: "1px solid #334155" }}
+                        formatter={(v) => [`₹${Number(v).toFixed(2)}Cr`, "Capital raised"]}
                       />
-                    ))}
-                  </div>
+                      <Line
+                        type="monotone"
+                        dataKey="capitalCr"
+                        stroke="#38bdf8"
+                        strokeWidth={2}
+                        dot={{ r: 2 }}
+                        name="Capital (Cr)"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
                 ) : (
-                  <>Capital / growth graph placeholder.</>
+                  <div className="h-full flex items-center justify-center">
+                    Capital / growth history appears after funding or investment.
+                  </div>
                 )}
               </div>
               <div className="mt-4 grid grid-cols-3 gap-3 text-[11px]">
@@ -416,14 +493,25 @@ export default function StartupDashboard() {
                   Funding & Capital
                 </p>
                 <span className="text-[11px] text-emerald-400 font-medium">
-                  Target ₹10Cr
+                  Target ₹{targetFundingCr.toFixed(0)}Cr
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-3">
                 Track your round progress and raise new capital.
               </p>
-              <div className="h-20 rounded-xl bg-gradient-to-br from-emerald-400/20 to-slate-900 border border-dashed border-slate-700 flex items-center justify-center text-[11px] text-slate-300">
-                ₹{stats.totalCapitalCr.toFixed(2)}Cr raised so far.
+              <div className="rounded-xl bg-gradient-to-br from-emerald-400/20 to-slate-900 border border-dashed border-slate-700 p-3 text-[11px] text-slate-300">
+                <div className="flex justify-between mb-2">
+                  <span>₹{stats.totalCapitalCr.toFixed(2)}Cr raised</span>
+                  <span className="text-emerald-400 font-semibold">
+                    {fundingProgressPct.toFixed(1)}%
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-400 transition-all duration-500"
+                    style={{ width: `${fundingProgressPct}%` }}
+                  />
+                </div>
               </div>
               <button
                 onClick={handleRaiseFunding}

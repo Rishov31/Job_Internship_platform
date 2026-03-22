@@ -7,7 +7,7 @@ const ctrl = require("../controllers/investorController");
 router.use(auth);
 
 router.get("/overview", requireRole("investor"), ctrl.getOverview);
-router.post("/invest", requireRole("investor"), ctrl.createInvestment);
+router.post("/invest", requireRole("investor"), ctrl.confirmInvestment);
 router.get("/portfolio", requireRole("investor"), ctrl.getPortfolio);
 
 router.get("/profile", requireRole("investor"), ctrl.getInvestorProfile);

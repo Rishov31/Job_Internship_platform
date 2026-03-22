@@ -10,5 +10,8 @@ router.get("/overview", requireRole("investor"), ctrl.getOverview);
 router.post("/invest", requireRole("investor"), ctrl.createInvestment);
 router.get("/portfolio", requireRole("investor"), ctrl.getPortfolio);
 
+router.get("/profile", requireRole("investor"), ctrl.getInvestorProfile);
+router.patch("/profile", requireRole("investor"), ctrl.upsertInvestorProfile);
+
 module.exports = router;
 

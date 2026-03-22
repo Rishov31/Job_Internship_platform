@@ -5,7 +5,13 @@ import { registerUser } from "../api/authApi";
 export default function Register() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [form, setForm] = useState({ fullName: "", email: "", password: "", role: "jobseeker" });
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    role: "jobseeker",
+    companyName: "",
+  });
   const [submitting, setSubmitting] = useState(false);
 
   // Map backend role keys to nicer labels used in UI
@@ -31,7 +37,12 @@ export default function Register() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const response = await registerUser(form);
+      const { companyName, ...rest } = form;
+      const payload =
+        form.role === "employer" && companyName?.trim()
+          ? { ...rest, companyName: companyName.trim() }
+          : rest;
+      const response = await registerUser(payload);
       const role = response.user?.role;
 
       // store token & user so subsequent dashboard API calls are authenticated
@@ -108,6 +119,21 @@ export default function Register() {
               className="mt-1 w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
             />
           </div>
+          {form.role === "employer" && (
+            <div>
+              <label className="block text-sm font-medium">Startup / company name</label>
+              <input
+                name="companyName"
+                value={form.companyName}
+                onChange={onChange}
+                placeholder="e.g. Acme Labs Pvt Ltd"
+                className="mt-1 w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Shown on your startup profile and Startup Explorer. Your account name above can be your own name.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-2">Select your role</label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">

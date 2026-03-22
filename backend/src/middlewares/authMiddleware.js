@@ -5,7 +5,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 module.exports = async function authMiddleware(req, res, next) {
   try {
-    const token = req.cookies?.token || (req.headers.authorization || "").replace("Bearer ", "");
+    // Prefer Authorization header so SPA localStorage token wins over a stale httpOnly cookie
+    const bearer = (req.headers.authorization || "").replace(/^Bearer\s+/i, "").trim();
+    const token = bearer || req.cookies?.token;
     if (!token) return res.status(401).json({ message: "Not authenticated" });
     let decoded;
     try {

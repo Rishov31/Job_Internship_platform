@@ -1,10 +1,16 @@
-const API_BASE = import.meta?.env?.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
+
+function authHeaders() {
+  const token = typeof localStorage !== "undefined" ? localStorage.getItem("token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 // Get all jobs with filters
 export async function getAllJobs(params = {}) {
   const queryString = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE}/jobs?${queryString}`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to fetch jobs");
   return res.json();
@@ -14,6 +20,7 @@ export async function getAllJobs(params = {}) {
 export async function getJobById(id) {
   const res = await fetch(`${API_BASE}/jobs/${id}`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to fetch job");
   return res.json();
@@ -23,7 +30,7 @@ export async function getJobById(id) {
 export async function createJob(jobData) {
   const res = await fetch(`${API_BASE}/jobs`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify(jobData),
   });
@@ -39,6 +46,7 @@ export async function getEmployerJobs(params = {}) {
   const queryString = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE}/jobs/employer/my-jobs?${queryString}`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to fetch employer jobs");
   return res.json();
@@ -48,7 +56,7 @@ export async function getEmployerJobs(params = {}) {
 export async function updateJob(id, jobData) {
   const res = await fetch(`${API_BASE}/jobs/${id}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify(jobData),
   });
@@ -64,6 +72,7 @@ export async function deleteJob(id) {
   const res = await fetch(`${API_BASE}/jobs/${id}`, {
     method: "DELETE",
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) {
     const error = await res.json();
@@ -76,7 +85,7 @@ export async function deleteJob(id) {
 export async function updateJobStatus(id, status) {
   const res = await fetch(`${API_BASE}/jobs/${id}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify({ status }),
   });
@@ -91,6 +100,7 @@ export async function updateJobStatus(id, status) {
 export async function getJobStats() {
   const res = await fetch(`${API_BASE}/jobs/employer/stats`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to fetch job stats");
   return res.json();
@@ -100,7 +110,7 @@ export async function getJobStats() {
 export async function saveJob(jobId, isScraped = false) {
   const res = await fetch(`${API_BASE}/jobs/save`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify({ jobId, isScraped }),
   });
@@ -115,13 +125,13 @@ export async function saveJob(jobId, isScraped = false) {
 export async function unsaveJob(jobId, isScraped = false) {
   const res = await fetch(`${API_BASE}/jobs/unsave`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     credentials: "include",
     body: JSON.stringify({ jobId, isScraped }),
   });
   if (!res.ok) {
     const error = await res.json();
-    throw new Error(error.message || "Failed to unsave job");
+    throw new Error(error.message || "Failed to remove saved job");
   }
   return res.json();
 }
@@ -131,6 +141,7 @@ export async function getSavedJobs(params = {}) {
   const queryString = new URLSearchParams(params).toString();
   const res = await fetch(`${API_BASE}/jobs/saved/list?${queryString}`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to fetch saved jobs");
   return res.json();
@@ -138,12 +149,13 @@ export async function getSavedJobs(params = {}) {
 
 // Check if jobs are saved by user
 export async function checkSavedJobs(jobIds, isScraped = false) {
-  const queryString = new URLSearchParams({ 
-    jobIds: jobIds.join(','), 
-    isScraped: isScraped.toString() 
+  const queryString = new URLSearchParams({
+    jobIds: jobIds.join(","),
+    isScraped: isScraped.toString(),
   }).toString();
   const res = await fetch(`${API_BASE}/jobs/saved/check?${queryString}`, {
     credentials: "include",
+    headers: { ...authHeaders() },
   });
   if (!res.ok) throw new Error("Failed to check saved jobs");
   return res.json();

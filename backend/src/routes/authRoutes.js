@@ -5,6 +5,7 @@ const User = require("../models/User");
 
 router.post("/register", auth.register);
 router.post("/login", auth.login);
+router.post("/logout", auth.logout);
 router.get("/me", auth.me);
 
 router.get("/debug/count", async (req, res) => {

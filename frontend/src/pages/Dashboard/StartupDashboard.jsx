@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 // import NotificationBell from "../../components/NotificationBell";
-import { me } from "../../api/authApi";
+import { me, logoutUser } from "../../api/authApi";
 import { getJobStats, getEmployerJobs } from "../../api/jobApi";
 
 // High-level startup founder dashboard – employer job module stays as sub‑module.
@@ -16,6 +16,10 @@ export default function StartupDashboard() {
     openPositions: 0,
   });
   const [startup, setStartup] = useState(null);
+  const [profileCompletion, setProfileCompletion] = useState({
+    completionPercentage: 0,
+    isProfileComplete: false,
+  });
   const [jobCards, setJobCards] = useState([]);
   const navigate = useNavigate();
 
@@ -39,9 +43,13 @@ export default function StartupDashboard() {
       return;
     }
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch("/api/startups/me/funding", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         credentials: "include",
         body: JSON.stringify({ amount }),
       });
@@ -71,9 +79,13 @@ export default function StartupDashboard() {
       "Innovation badge + goodies"
     );
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch("/api/startups/me/repos", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         credentials: "include",
         body: JSON.stringify({ url, rewardDetails }),
       });
@@ -96,20 +108,55 @@ export default function StartupDashboard() {
   };
 
   useEffect(() => {
-    // Basic user + job stats from existing APIs
     const fetchData = async () => {
       try {
-        const [userData, jobStats, employerJobs, startupRes] = await Promise.all([
-          me(),
+        const token = localStorage.getItem("token");
+        if (!token) {
+          navigate("/login");
+          return;
+        }
+        const userData = await me();
+        if (!userData) {
+          navigate("/login");
+          return;
+        }
+        if (userData.role !== "employer" && !userData.isAdmin) {
+          if (userData.role === "jobseeker") navigate("/student/dashboard");
+          else if (userData.role === "investor") navigate("/investor/dashboard");
+          else navigate("/");
+          return;
+        }
+        setUser(userData);
+        try {
+          localStorage.setItem(
+            "user",
+            JSON.stringify({
+              id: userData.id,
+              fullName: userData.fullName,
+              email: userData.email,
+              role: userData.role,
+              isAdmin: userData.isAdmin,
+            })
+          );
+          localStorage.setItem("role", userData.role || "");
+        } catch {
+          // ignore
+        }
+
+        const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+        const [jobStats, employerJobs, startupRes] = await Promise.all([
           getJobStats().catch(() => null),
           getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
-          fetch(`/api/startups/me`, { credentials: "include" }).then((r) =>
-            r.ok ? r.json() : null
-          ),
+          fetch(`/api/startups/me`, {
+            credentials: "include",
+            headers: authHeaders,
+          }).then((r) => (r.ok ? r.json() : null)),
         ]);
 
-        if (userData) setUser(userData);
-
+        if (startupRes?.completion) {
+          setProfileCompletion(startupRes.completion);
+        }
         if (startupRes?.startup) {
           const s = startupRes.startup;
           setStartup(s);
@@ -134,9 +181,14 @@ export default function StartupDashboard() {
       }
     };
     fetchData();
-  }, []);
+  }, [navigate]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // ignore
+    }
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("role");
@@ -171,6 +223,21 @@ export default function StartupDashboard() {
               📈
             </span>
             Overview
+          </button>
+
+          <button
+            onClick={() => navigate("/startup/profile")}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
+          >
+            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
+              🏢
+            </span>
+            Company profile
+            {!profileCompletion.isProfileComplete && (
+              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200">
+                {profileCompletion.completionPercentage}%
+              </span>
+            )}
           </button>
 
           <button
@@ -255,6 +322,26 @@ export default function StartupDashboard() {
 
         {/* Body – mimic the Startup Overview layout */}
         <main className="flex-1 overflow-auto px-4 md:px-8 py-6 md:py-8 bg-[#050818] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.2),transparent_55%),radial-gradient(circle_at_bottom,_rgba(129,140,248,0.16),transparent_55%)]">
+          {!profileCompletion.isProfileComplete && (
+            <div className="mb-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-100">
+                  Complete your company profile
+                </p>
+                <p className="text-xs text-amber-100/80 mt-0.5">
+                  {profileCompletion.completionPercentage}% done — add industry,
+                  description (40+ chars), website, and links to reach 70%.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate("/startup/profile")}
+                className="shrink-0 px-4 py-2 rounded-xl bg-amber-500 text-slate-900 text-xs font-bold hover:bg-amber-400"
+              >
+                Continue →
+              </button>
+            </div>
+          )}
           {/* Top row: startup overview + job posting summary + funding card */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Startup Overview panel */}

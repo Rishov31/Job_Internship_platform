@@ -1,38 +1,113 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { me, logoutUser } from "../../api/authApi";
 // import NotificationBell from "../../components/NotificationBell";
 
 export default function InvestorDashboard() {
+  const [authUser, setAuthUser] = useState(null);
+  const [investorProfile, setInvestorProfile] = useState(null);
   const [totalPortfolio, setTotalPortfolio] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const [discovery, setDiscovery] = useState([]);
   const [portfolioItems, setPortfolioItems] = useState([]);
+  const [profileForm, setProfileForm] = useState({
+    firmName: "",
+    bio: "",
+    investmentFocus: "",
+  });
+  const [savingProfile, setSavingProfile] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const API_BASE =
-      import.meta?.env?.VITE_API_URL || "http://localhost:5000/api";
-    const token = localStorage.getItem("token");
+    if (!investorProfile) return;
+    setProfileForm({
+      firmName: investorProfile.firmName || "",
+      bio: investorProfile.bio || "",
+      investmentFocus: (investorProfile.investmentFocus || []).join(", "),
+    });
+  }, [investorProfile]);
 
-    fetch(`${API_BASE}/investor/overview`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setDiscovery(data.discovery?.startups || []);
-        const p = data.portfolio || {};
-        setTotalPortfolio((p.totalInvestment || 0) / 1_00_00_000);
-        setTotalValue((p.totalCurrentValue || 0) / 1_00_00_000);
-        setPortfolioItems(p.items || []);
+  useEffect(() => {
+    let cancelled = false;
+    const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
+
+    (async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+      const user = await me();
+      if (cancelled) return;
+      if (!user) {
+        navigate("/login");
+        return;
+      }
+      if (user.role !== "investor" && !user.isAdmin) {
+        if (user.role === "jobseeker") navigate("/student/dashboard");
+        else if (user.role === "employer") navigate("/startup/dashboard");
+        else navigate("/");
+        return;
+      }
+      setAuthUser(user);
+      try {
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            id: user.id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+            isAdmin: user.isAdmin,
+          })
+        );
+        localStorage.setItem("role", user.role || "");
+      } catch {
+        // ignore
+      }
+
+      const headers = {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
+      fetch(`${API_BASE}/investor/overview`, {
+        headers,
+        credentials: "include",
       })
-      .catch(() => {
-        // ignore and keep zeros if API not available
-      });
-  }, []);
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (!data || cancelled) return;
+          setDiscovery(data.discovery?.startups || []);
+          const p = data.portfolio || {};
+          setTotalPortfolio((p.totalInvestment || 0) / 1_00_00_000);
+          setTotalValue((p.totalCurrentValue || 0) / 1_00_00_000);
+          setPortfolioItems(p.items || []);
+        })
+        .catch(() => {});
 
-  const handleLogout = () => {
+      fetch(`${API_BASE}/investor/profile`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          setInvestorProfile(data);
+        })
+        .catch(() => {});
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // ignore
+    }
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("role");
@@ -41,6 +116,38 @@ export default function InvestorDashboard() {
       // ignore
     }
     navigate("/login");
+  };
+
+  const saveInvestorProfile = async (e) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setSavingProfile(true);
+    try {
+      const focus = profileForm.investmentFocus
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const res = await fetch("/api/investor/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          firmName: profileForm.firmName.trim(),
+          bio: profileForm.bio.trim(),
+          investmentFocus: focus,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) setInvestorProfile(data);
+    } catch {
+      // ignore
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   return (
@@ -124,10 +231,15 @@ export default function InvestorDashboard() {
             <div className="hidden sm:flex items-center gap-3">
               <div className="text-right">
                 <p className="text-xs text-slate-400">Investor</p>
-                <p className="text-sm font-medium text-slate-100">You</p>
+                <p className="text-sm font-medium text-slate-100">
+                  {investorProfile?.firmName || authUser?.fullName || "…"}
+                </p>
               </div>
               <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-semibold text-slate-100">
-                IN
+                {(investorProfile?.firmName || authUser?.fullName || "IN")
+                  .toString()
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
             </div>
             <button
@@ -296,6 +408,67 @@ export default function InvestorDashboard() {
               </div>
             </section>
           </div>
+
+          {/* Investor profile (stored in DB) */}
+          <section className="mb-6 bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-100">
+                  Investor profile
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Saved to your account. Completion:{" "}
+                  {investorProfile?.profileCompletionPercentage ?? 0}%
+                </p>
+              </div>
+            </div>
+            <form onSubmit={saveInvestorProfile} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-[11px]">
+              <label className="block text-slate-300 md:col-span-2">
+                Firm / fund name
+                <input
+                  value={profileForm.firmName}
+                  onChange={(e) =>
+                    setProfileForm((p) => ({ ...p, firmName: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-100"
+                />
+              </label>
+              <label className="block text-slate-300 md:col-span-2">
+                Focus areas (comma-separated)
+                <input
+                  value={profileForm.investmentFocus}
+                  onChange={(e) =>
+                    setProfileForm((p) => ({
+                      ...p,
+                      investmentFocus: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. AI, Climate, MSME"
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-100"
+                />
+              </label>
+              <label className="block text-slate-300 md:col-span-2">
+                Bio
+                <textarea
+                  value={profileForm.bio}
+                  onChange={(e) =>
+                    setProfileForm((p) => ({ ...p, bio: e.target.value }))
+                  }
+                  rows={3}
+                  className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-slate-100"
+                />
+              </label>
+              <div className="md:col-span-2">
+                <button
+                  type="submit"
+                  disabled={savingProfile}
+                  className="px-4 py-2 rounded-lg bg-indigo-500 text-white text-xs font-semibold hover:bg-indigo-600 disabled:opacity-60"
+                >
+                  {savingProfile ? "Saving…" : "Save profile"}
+                </button>
+              </div>
+            </form>
+          </section>
 
           {/* Bottom row: Portfolio overview */}
           <section className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">

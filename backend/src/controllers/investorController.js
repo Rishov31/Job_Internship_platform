@@ -1,5 +1,55 @@
 const Startup = require("../models/Startup");
 const Investment = require("../models/Investment");
+const InvestorProfile = require("../models/InvestorProfile");
+
+function calcInvestorCompletion(p) {
+  if (!p) return 0;
+  let s = 0;
+  if (p.firmName) s += 25;
+  if ((p.investmentFocus || []).length) s += 25;
+  if (p.bio) s += 25;
+  if ((p.preferredStages || []).length) s += 25;
+  return Math.min(s, 100);
+}
+
+exports.getInvestorProfile = async (req, res, next) => {
+  try {
+    let profile = await InvestorProfile.findOne({ user: req.user.id });
+    if (!profile) {
+      profile = await InvestorProfile.create({ user: req.user.id });
+    }
+    res.json(profile);
+  } catch (e) {
+    next(e);
+  }
+};
+
+exports.upsertInvestorProfile = async (req, res, next) => {
+  try {
+    const { firmName, investmentFocus, bio, checkSizeMin, checkSizeMax, preferredStages } =
+      req.body || {};
+    const profile = await InvestorProfile.findOneAndUpdate(
+      { user: req.user.id },
+      {
+        ...(firmName !== undefined && { firmName }),
+        ...(investmentFocus !== undefined && { investmentFocus }),
+        ...(bio !== undefined && { bio }),
+        ...(checkSizeMin !== undefined && { checkSizeMin }),
+        ...(checkSizeMax !== undefined && { checkSizeMax }),
+        ...(preferredStages !== undefined && { preferredStages }),
+        user: req.user.id,
+      },
+      { new: true, upsert: true, runValidators: true }
+    );
+    const pct = calcInvestorCompletion(profile);
+    profile.profileCompletionPercentage = pct;
+    profile.isProfileComplete = pct >= 70;
+    await profile.save();
+    res.json(profile);
+  } catch (e) {
+    next(e);
+  }
+};
 
 // Overview for investor dashboard: discovery + portfolio stats
 exports.getOverview = async (req, res, next) => {

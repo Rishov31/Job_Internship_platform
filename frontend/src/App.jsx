@@ -11,6 +11,7 @@ import AdminDashboard from "./pages/Dashboard/AdminDashboard";
 import InvestorDashboard from "./pages/Dashboard/InvestorDashboard";
 import StudentDashboard from "./pages/Dashboard/StudentDashboard";
 import StartupDashboard from "./pages/Dashboard/StartupDashboard";
+import StartupProfile from "./pages/Dashboard/StartupProfile";
 
 // Job components
 import PostJob from "./pages/Jobs/PostJob";
@@ -73,6 +74,7 @@ export default function App() {
 
       {/* Startup Ecosystem Dashboard (new) */}
       <Route path="/startup/dashboard" element={<StartupDashboard />} />
+      <Route path="/startup/profile" element={<StartupProfile />} />
       <Route path="/admin/resources" element={<ResourceManagement />} />
 
       {/* Public Resource Routes */}

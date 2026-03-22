@@ -1,62 +1,118 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { me, logoutUser } from "../../api/authApi";
 // import NotificationBell from "../../components/NotificationBell";
 
 // This dashboard is a higher-level student view.
 // Job & internship search remain in the existing jobseeker module (sub‑module).
 
+function authHeader() {
+  const token = localStorage.getItem("token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function studentDisplayName(profile, authUser) {
+  // Account name from JWT-backed /auth/me is always correct for the logged-in user
+  if (authUser?.fullName) return authUser.fullName;
+  const pi = profile?.personalInfo;
+  if (pi?.firstName || pi?.lastName) {
+    return `${pi.firstName || ""} ${pi.lastName || ""}`.trim();
+  }
+  return "Student";
+}
+
 export default function StudentDashboard() {
+  const [authUser, setAuthUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [completion, setCompletion] = useState({
     completionPercentage: 0,
     isProfileComplete: false,
   });
   const [collaborations, setCollaborations] = useState(0);
+  const [approvedContributions, setApprovedContributions] = useState(0);
   const [contributionScore, setContributionScore] = useState(0);
   const [startupCards, setStartupCards] = useState([]);
-  // Fallback user info from auth for when detailed profile is not yet created
-  let storedUser = null;
-  try {
-    storedUser = JSON.parse(localStorage.getItem("user") || "null");
-  } catch {
-    storedUser = null;
-  }
   const navigate = useNavigate();
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const API_BASE = "/api"; // use relative API path so proxy always works
+    let cancelled = false;
+    const API_BASE = "/api";
 
-    // Load student profile basics from existing jobseeker profile
-    fetch(`${API_BASE}/jobseeker/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        setProfile(data);
-        if (data) {
-          setContributionScore(data.contributionScore || 0);
-        }
+    (async () => {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      const user = await me();
+      if (cancelled) return;
+      if (!user) {
+        navigate("/login");
+        return;
+      }
+      if (user.role !== "jobseeker" && !user.isAdmin) {
+        if (user.role === "employer") navigate("/startup/dashboard");
+        else if (user.role === "investor") navigate("/investor/dashboard");
+        else navigate("/");
+        return;
+      }
+      setAuthUser(user);
+      try {
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            id: user.id,
+            fullName: user.fullName,
+            email: user.email,
+            role: user.role,
+            isAdmin: user.isAdmin,
+          })
+        );
+        localStorage.setItem("role", user.role || "");
+      } catch {
+        // ignore
+      }
+
+      const headers = { ...authHeader() };
+
+      // Load student profile basics from existing jobseeker profile
+      fetch(`${API_BASE}/jobseeker/profile`, {
+        headers,
+        credentials: "include",
       })
-      .catch(() => setProfile(null));
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled) return;
+          setProfile(data);
+          if (data?.contributionScore != null) {
+            setContributionScore((prev) =>
+              Math.max(prev, data.contributionScore || 0)
+            );
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setProfile(null);
+        });
 
-    // Completion stats
-    fetch(`${API_BASE}/jobseeker/profile/completion`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) setCompletion(data);
+      fetch(`${API_BASE}/jobseeker/profile/completion`, {
+        headers,
+        credentials: "include",
       })
-      .catch(() => {});
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data) return;
+          setCompletion(data);
+        })
+        .catch(() => {});
 
-    // Startup explorer cards
-    fetch(`/api/startups/explore?limit=4`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.startups) {
+      fetch(`${API_BASE}/startups/explore?limit=8`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data?.startups) return;
           const mapped = data.startups.map((s) => ({
             id: s._id,
             name: s.name,
@@ -73,28 +129,41 @@ export default function StudentDashboard() {
               (s.githubRepos && s.githubRepos[0]?.rewardDetails) || null,
           }));
           setStartupCards(mapped);
-        }
-      })
-      .catch(() => {});
+        })
+        .catch(() => {});
 
-    // Contributions summary for collaboration count & score
-    fetch(`/api/contributions/student/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: "include",
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.summary) {
+      fetch(`${API_BASE}/contributions/student/me`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data?.summary) return;
           setCollaborations(data.summary.collaborationCount || 0);
-          if (!contributionScore && data.summary.totalPoints != null) {
-            setContributionScore(data.summary.totalPoints);
+          setApprovedContributions(data.summary.approvedCount || 0);
+          if (data.summary.totalPoints != null) {
+            setContributionScore((prev) =>
+              Math.max(prev, data.summary.totalPoints)
+            );
           }
-        }
-      })
-      .catch(() => {});
-  }, [contributionScore]);
+        })
+        .catch(() => {});
+    })();
 
-  const handleLogout = () => {
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
+
+  const displayName = studentDisplayName(profile, authUser);
+  const initial = (displayName || "S").trim().charAt(0).toUpperCase();
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // ignore
+    }
     try {
       localStorage.removeItem("token");
       localStorage.removeItem("role");
@@ -204,18 +273,11 @@ export default function StudentDashboard() {
               <div className="text-right">
                 <p className="text-xs text-slate-400">Student</p>
                 <p className="text-sm font-medium text-slate-100">
-                    {profile?.personalInfo?.firstName ||
-                      profile?.personalInfo?.lastName ||
-                      storedUser?.fullName ||
-                      "You"}
+                  {authUser ? displayName : "…"}
                 </p>
               </div>
               <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-semibold text-slate-100">
-                {(
-                  profile?.personalInfo?.firstName ||
-                  storedUser?.fullName ||
-                  "S"
-                ).charAt(0)}
+                {authUser ? initial : "…"}
               </div>
             </div>
             <button
@@ -236,21 +298,12 @@ export default function StudentDashboard() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div className="flex items-center gap-4">
                   <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-white text-lg font-semibold">
-                    {(
-                      profile?.personalInfo?.firstName ||
-                      storedUser?.fullName ||
-                      "S"
-                    ).charAt(0)}
+                    {initial}
                   </div>
                   <div>
-                    <p>Rishov Saha</p>
-                    {/* <p className="text-sm font-semibold text-slate-50">
-                      {profile?.personalInfo
-                        ? `${profile.personalInfo.firstName || ""} ${
-                            profile.personalInfo.lastName || ""
-                          }`.trim()
-                        : storedUser?.fullName || "Student Name"}
-                    </p> */}
+                    <p className="text-sm font-semibold text-slate-50">
+                      {displayName}
+                    </p>
                     <p className="text-xs text-slate-400">
                       {profile?.professionalInfo?.currentTitle ||
                         "Add your current role / program"}
@@ -266,9 +319,9 @@ export default function StudentDashboard() {
 
                 <button
                   onClick={() => navigate("/jobseeker/profile")}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100"
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 hover:bg-slate-800"
                 >
-                  View account
+                  {completion.isProfileComplete ? "Edit profile" : "Complete profile"}
                 </button>
               </div>
 
@@ -279,15 +332,19 @@ export default function StudentDashboard() {
                     Technical Skills
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(profile?.skills?.technical || ["React", "JavaScript"]).map(
-                      (skill, idx) => (
+                    {(profile?.skills?.technical || []).length ? (
+                      profile.skills.technical.map((skill, idx) => (
                         <span
                           key={`${skill}-${idx}`}
                           className="px-2 py-1 rounded-full bg-indigo-500/20 text-[11px] text-indigo-200"
                         >
                           {skill}
                         </span>
-                      )
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-slate-500">
+                        Add technical skills in your profile
+                      </span>
                     )}
                   </div>
                 </div>
@@ -296,15 +353,19 @@ export default function StudentDashboard() {
                     Soft Skills
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    {(profile?.skills?.soft || ["Communication", "Teamwork"]).map(
-                      (skill, idx) => (
+                    {(profile?.skills?.soft || []).length ? (
+                      profile.skills.soft.map((skill, idx) => (
                         <span
                           key={`${skill}-${idx}`}
                           className="px-2 py-1 rounded-full bg-amber-500/20 text-[11px] text-amber-100"
                         >
                           {skill}
                         </span>
-                      )
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-slate-500">
+                        Add soft skills in your profile
+                      </span>
                     )}
                   </div>
                 </div>
@@ -344,7 +405,7 @@ export default function StudentDashboard() {
                   Contribution Tracker
                 </p>
                 <span className="text-[11px] text-emerald-400 font-medium">
-                  +1,000 pts
+                  {contributionScore > 0 ? `+${contributionScore} pts` : "0 pts"}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mb-3">
@@ -361,19 +422,21 @@ export default function StudentDashboard() {
               </div>
               <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
-                  <p className="text-slate-400">Repos</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">7</p>
+                  <p className="text-slate-400">Startups</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                    {collaborations || 0}
+                  </p>
                 </div>
                 <div className="rounded-lg bg-slate-800/80 p-2">
-                  <p className="text-slate-400">PRs merged</p>
+                  <p className="text-slate-400">Approved</p>
                   <p className="mt-1 text-sm font-semibold text-emerald-400">
-                    18
+                    {approvedContributions}
                   </p>
                 </div>
                 <div className="rounded-lg bg-slate-800/80 p-2">
                   <p className="text-slate-400">Collab level</p>
                   <p className="mt-1 text-sm font-semibold text-indigo-300">
-                    Silver
+                    {profile?.collaborationLevel || "Bronze"}
                   </p>
                 </div>
               </div>
@@ -407,6 +470,12 @@ export default function StudentDashboard() {
               </div>
 
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px]">
+                {startupCards.length === 0 && (
+                  <div className="md:col-span-2 rounded-xl border border-dashed border-slate-700 bg-slate-900/60 py-8 px-4 text-center text-slate-400">
+                    No startups in the directory yet. When founders register as
+                    Startup and save their company profile, they appear here.
+                  </div>
+                )}
                 {startupCards.map((s) => (
                   <div
                     key={s.id}

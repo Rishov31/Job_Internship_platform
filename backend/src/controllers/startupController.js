@@ -1,14 +1,70 @@
 const Startup = require("../models/Startup");
+const User = require("../models/User");
+
+const STARTUP_UPSERT_FIELDS = [
+  "name",
+  "logoUrl",
+  "industry",
+  "description",
+  "stage",
+  "websiteUrl",
+  "githubUrl",
+  "activeProjects",
+  "openPositions",
+  "contributorsCount",
+];
+
+function calcStartupCompletion(s) {
+  if (!s) {
+    return { completionPercentage: 0, isProfileComplete: false };
+  }
+  let p = 0;
+  if ((s.name || "").trim().length >= 2) p += 15;
+  if ((s.industry || "").trim().length >= 2) p += 15;
+  if ((s.description || "").trim().length >= 40) p += 25;
+  if (s.stage) p += 10;
+  if ((s.websiteUrl || "").trim().length >= 4) p += 15;
+  if ((s.logoUrl || "").trim().length >= 4) p += 10;
+  if (
+    (s.githubUrl || "").trim().length >= 4 ||
+    (Array.isArray(s.githubRepos) && s.githubRepos.length > 0)
+  ) {
+    p += 10;
+  }
+  if (p > 100) p = 100;
+  return {
+    completionPercentage: p,
+    isProfileComplete: p >= 70,
+  };
+}
+
+exports.calcStartupCompletion = calcStartupCompletion;
 
 // Get or create startup profile for current founder (employer)
 exports.getMyStartup = async (req, res, next) => {
   try {
     let startup = await Startup.findOne({ owner: req.user.id });
     if (!startup) {
-      // Return an empty shell so UI can prompt to fill details
-      return res.json({ hasProfile: false, startup: null });
+      return res.json({
+        hasProfile: false,
+        startup: null,
+        completion: { completionPercentage: 0, isProfileComplete: false },
+      });
     }
-    res.json({ hasProfile: true, startup });
+    res.json({
+      hasProfile: true,
+      startup,
+      completion: calcStartupCompletion(startup),
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+exports.getStartupCompletion = async (req, res, next) => {
+  try {
+    const startup = await Startup.findOne({ owner: req.user.id });
+    res.json(calcStartupCompletion(startup));
   } catch (e) {
     next(e);
   }
@@ -16,13 +72,25 @@ exports.getMyStartup = async (req, res, next) => {
 
 exports.upsertMyStartup = async (req, res, next) => {
   try {
-    const data = req.body || {};
+    const body = req.body || {};
+    const data = { owner: req.user.id };
+    STARTUP_UPSERT_FIELDS.forEach((k) => {
+      if (body[k] !== undefined) data[k] = body[k];
+    });
+
+    const existing = await Startup.findOne({ owner: req.user.id });
+    if (!existing && !data.name) {
+      const u = await User.findById(req.user.id);
+      data.name = (u && u.fullName) || "My Startup";
+    }
+
     const startup = await Startup.findOneAndUpdate(
       { owner: req.user.id },
-      { ...data, owner: req.user.id },
-      { new: true, upsert: true, runValidators: true }
+      data,
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
     );
-    res.json({ startup });
+    const completion = calcStartupCompletion(startup);
+    res.json({ startup, completion });
   } catch (e) {
     next(e);
   }

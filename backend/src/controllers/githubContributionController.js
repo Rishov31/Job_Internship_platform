@@ -29,7 +29,14 @@ exports.getGithubActivity = async (req, res, next) => {
 
     const maxRepos = req.query.maxRepos;
     const days = req.query.days;
-    const data = await getStudentGithubActivity(gh, { maxRepos, days });
+    const accountEmails = [];
+    if (user.email) accountEmails.push(user.email);
+
+    const data = await getStudentGithubActivity(gh, {
+      maxRepos,
+      days,
+      accountEmails,
+    });
     res.json({ success: true, needsGithubUsername: false, ...data });
   } catch (e) {
     if (e.response?.status === 403) {

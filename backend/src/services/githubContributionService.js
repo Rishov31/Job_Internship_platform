@@ -26,12 +26,54 @@ function parseGithubRepoUrl(raw) {
   return { owner: m[1], repo };
 }
 
+function normalizeGhLogin(s) {
+  return String(s || "")
+    .trim()
+    .replace(/^@/, "")
+    .toLowerCase();
+}
+
+/**
+ * Match commits without relying on GitHub's `author` query param (breaks with private
+ * noreply emails). Uses API author/committer login, noreply patterns, and HireMe account email.
+ */
+function commitBelongsToGithubUser(commitObj, githubUsername, accountEmails = []) {
+  const want = normalizeGhLogin(githubUsername);
+  if (!want) return false;
+
+  const apiLogin = normalizeGhLogin(
+    commitObj.author?.login || commitObj.committer?.login
+  );
+  if (apiLogin === want) return true;
+
+  const authorEmail = (commitObj.commit?.author?.email || "").trim().toLowerCase();
+  const committerEmail = (commitObj.commit?.committer?.email || "").trim().toLowerCase();
+  const emList = [authorEmail, committerEmail].filter(Boolean);
+
+  const allowed = new Set(
+    (accountEmails || [])
+      .map((e) => String(e || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  for (const em of emList) {
+    if (allowed.has(em)) return true;
+  }
+
+  for (const em of emList) {
+    const plus = em.match(/^\d+\+([^@]+)@users\.noreply.github.com$/i);
+    if (plus && normalizeGhLogin(plus[1]) === want) return true;
+    if (em === `${want}@users.noreply.github.com`) return true;
+  }
+
+  return false;
+}
+
 const MAX_BRANCHES_DEFAULT = parseInt(
   process.env.GITHUB_MAX_BRANCHES_PER_REPO || "25",
   10
 );
 const MAX_PAGES_PER_BRANCH = parseInt(
-  process.env.GITHUB_MAX_PAGES_PER_BRANCH || "4",
+  process.env.GITHUB_MAX_PAGES_PER_BRANCH || "6",
   10
 );
 
@@ -59,7 +101,8 @@ function prioritizeBranchNames(names, max) {
 
 /**
  * GitHub "List commits" only walks the default branch unless you pass `sha` (branch/tag).
- * This loads branch tips, then fetches commits per branch for the given author — deduped by SHA.
+ * This loads branch tips, then fetches recent commits per branch (no server-side `author`
+ * filter), then keeps commits linked to the user by login, noreply email, or app account email.
  */
 async function fetchCommitsForAuthorAcrossBranches(
   owner,
@@ -68,6 +111,7 @@ async function fetchCommitsForAuthorAcrossBranches(
   sinceIso,
   options = {}
 ) {
+  const accountEmails = options.accountEmails || [];
   const maxBranches = Math.min(
     Number(options.maxBranches) || MAX_BRANCHES_DEFAULT,
     50
@@ -82,7 +126,6 @@ async function fetchCommitsForAuthorAcrossBranches(
     while (page <= maxPages) {
       try {
         const params = {
-          author: githubUsername,
           since: sinceIso,
           per_page: 100,
           page,
@@ -95,10 +138,10 @@ async function fetchCommitsForAuthorAcrossBranches(
         );
         if (!Array.isArray(data) || !data.length) break;
         for (const c of data) {
-          if (c.sha && !seenSha.has(c.sha)) {
-            seenSha.add(c.sha);
-            out.push(c);
-          }
+          if (!c.sha || seenSha.has(c.sha)) continue;
+          if (!commitBelongsToGithubUser(c, githubUsername, accountEmails)) continue;
+          seenSha.add(c.sha);
+          out.push(c);
         }
         if (data.length < 100) break;
         page += 1;
@@ -319,6 +362,9 @@ function collectReposFromStartups(startups, maxRepos) {
 async function getStudentGithubActivity(githubUsername, options = {}) {
   const maxRepos = Math.min(Number(options.maxRepos) || 18, 40);
   const days = Math.min(Number(options.days) || 30, 90);
+  const accountEmails = Array.isArray(options.accountEmails)
+    ? options.accountEmails
+    : [];
 
   const Startup = require("../models/Startup");
   const startups = await Startup.find({})
@@ -361,7 +407,8 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
         item.owner,
         item.repo,
         githubUsername,
-        sinceIso
+        sinceIso,
+        { accountEmails }
       );
       for (const c of commits) {
         const when = c.commit?.author?.date || c.commit?.committer?.date;
@@ -372,7 +419,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
 
       const prs = await fetchPullRequestsForRepo(item.owner, item.repo);
       for (const pr of prs) {
-        if ((pr.user?.login || "").toLowerCase() !== githubUsername.toLowerCase()) {
+        if (normalizeGhLogin(pr.user?.login) !== normalizeGhLogin(githubUsername)) {
           continue;
         }
         const when = pr.merged_at || pr.created_at;
@@ -396,7 +443,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
   let zeroActivityTip = null;
   if (total === 0 && reposScanned > 0) {
     zeroActivityTip =
-      "Still zero? GitHub matches the `author` filter to your GitHub account email. Run `git config user.email` and ensure that email is added in GitHub → Settings → Emails (and verified).";
+      "Still zero? 1) Profile → GitHub username must match your account (e.g. Rishov31). 2) If commits use a private noreply address, set `git config user.email` to the exact `ID+username@users.noreply.github.com` from GitHub → Settings → Emails, or use your verified Gmail so it matches your HireMe email. 3) Commits must be on repos linked on startup profiles (any scanned branch).";
   }
 
   let topStartup = null;

@@ -63,7 +63,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // Remove redundant index to avoid duplicate index warning; unique on path is enough
-//do
+
 module.exports = mongoose.model("User", userSchema);
 
 

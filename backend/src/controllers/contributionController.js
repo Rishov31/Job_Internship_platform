@@ -1,6 +1,8 @@
 const Contribution = require("../models/Contribution");
 const Startup = require("../models/Startup");
+const User = require("../models/User");
 const JobSeekerProfile = require("../models/JobSeekerProfile");
+const { normalizeGithubUsernameInput } = require("../utils/githubUsername");
 
 // Helper to bump student's contribution metrics when a contribution is approved
 async function awardContributionPoints(studentId, points, badges = []) {
@@ -73,6 +75,82 @@ exports.listMyContributions = async (req, res, next) => {
         totalPoints,
         approvedCount,
         collaborationCount,
+      },
+    });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/**
+ * Founder awards points from GitHub contributor login (creates approved contribution).
+ */
+exports.founderAwardByGithub = async (req, res, next) => {
+  try {
+    const {
+      githubUsername,
+      points = 150,
+      description = "Open-source contribution reward",
+    } = req.body || {};
+
+    const want = normalizeGithubUsernameInput(githubUsername || "");
+    if (!want) {
+      return res.status(400).json({ message: "githubUsername is required" });
+    }
+
+    const startup = await Startup.findOne({ owner: req.user.id });
+    if (!startup) {
+      return res.status(404).json({ message: "No startup profile found" });
+    }
+
+    const users = await User.find({ role: "jobseeker" })
+      .select("githubUsername fullName email")
+      .limit(5000)
+      .lean();
+
+    const student = users.find(
+      (u) => normalizeGithubUsernameInput(u.githubUsername || "") === want
+    );
+    if (!student) {
+      return res.status(404).json({
+        message:
+          "No student on HireMe matches this GitHub username. They must add GitHub on their profile.",
+      });
+    }
+
+    let repoUrl = (startup.githubUrl || "").trim();
+    if (!repoUrl && startup.githubRepos?.length) {
+      repoUrl = (startup.githubRepos[0].url || "").trim();
+    }
+    if (!repoUrl) {
+      return res.status(400).json({
+        message: "Link a GitHub repository on your startup profile first.",
+      });
+    }
+
+    const badgesAwarded = ["Innovation Badge"];
+    const contribution = await Contribution.create({
+      student: student._id,
+      startup: startup._id,
+      repoUrl,
+      description: String(description).slice(0, 500),
+      status: "approved",
+      pointsAwarded: Math.min(Math.max(Number(points) || 0, 0), 10000),
+      badgesAwarded,
+    });
+
+    await awardContributionPoints(
+      student._id,
+      contribution.pointsAwarded,
+      badgesAwarded
+    );
+
+    res.status(201).json({
+      contribution,
+      student: {
+        fullName: student.fullName,
+        email: student.email,
+        githubUsername: student.githubUsername,
       },
     });
   } catch (e) {

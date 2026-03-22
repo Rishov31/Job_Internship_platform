@@ -1,5 +1,5 @@
 import React from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -9,7 +9,11 @@ import EmployerDashboard from "./pages/Dashboard/EmployerDashboard";
 import EmployerProfile from "./pages/Dashboard/EmployerProfile";
 import AdminDashboard from "./pages/Dashboard/AdminDashboard";
 import InvestorDashboard from "./pages/Dashboard/InvestorDashboard";
+import StudentLayout from "./layouts/StudentLayout";
 import StudentDashboard from "./pages/Dashboard/StudentDashboard";
+import StudentStartupExplorer from "./pages/Dashboard/StudentStartupExplorer";
+import StudentContributions from "./pages/Dashboard/StudentContributions";
+import StudentAnalytics from "./pages/Dashboard/StudentAnalytics";
 import StartupDashboard from "./pages/Dashboard/StartupDashboard";
 import StartupProfile from "./pages/Dashboard/StartupProfile";
 
@@ -57,8 +61,14 @@ export default function App() {
         {/* Public Job Details */}
         <Route path="/jobs/:id" element={<JobDetails />} />
 
-      {/* Student Ecosystem Dashboard (new) */}
-      <Route path="/student/dashboard" element={<StudentDashboard />} />
+      {/* Student Ecosystem — shared shell + sub-pages */}
+      <Route path="/student" element={<StudentLayout />}>
+        <Route index element={<Navigate to="/student/dashboard" replace />} />
+        <Route path="dashboard" element={<StudentDashboard />} />
+        <Route path="explore" element={<StudentStartupExplorer />} />
+        <Route path="contributions" element={<StudentContributions />} />
+        <Route path="analytics" element={<StudentAnalytics />} />
+      </Route>
 
       {/* Jobseeker Routes (job & internship sub‑module) */}
       <Route path="/jobseeker/dashboard" element={<JobSeekerDashboard />} />

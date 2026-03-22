@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { me, logoutUser } from "../../api/authApi";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import ContributionGithubChart from "../../components/ContributionGithubChart";
 // import NotificationBell from "../../components/NotificationBell";
 
@@ -23,7 +22,8 @@ function studentDisplayName(profile, authUser) {
 }
 
 export default function StudentDashboard() {
-  const [authUser, setAuthUser] = useState(null);
+  const outlet = useOutletContext();
+  const authUser = outlet?.authUser;
   const [profile, setProfile] = useState(null);
   const [completion, setCompletion] = useState({
     completionPercentage: 0,
@@ -38,50 +38,13 @@ export default function StudentDashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (!authUser?.id) return;
     let cancelled = false;
     const API_BASE = "/api";
+    const headers = { ...authHeader() };
 
-    (async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/login");
-        return;
-      }
-
-      const user = await me();
-      if (cancelled) return;
-      if (!user) {
-        navigate("/login");
-        return;
-      }
-      if (user.role !== "jobseeker" && !user.isAdmin) {
-        if (user.role === "employer") navigate("/startup/dashboard");
-        else if (user.role === "investor") navigate("/investor/dashboard");
-        else navigate("/");
-        return;
-      }
-      setAuthUser(user);
-      try {
-        localStorage.setItem(
-          "user",
-          JSON.stringify({
-            id: user.id,
-            fullName: user.fullName,
-            email: user.email,
-            role: user.role,
-            isAdmin: user.isAdmin,
-            githubUsername: user.githubUsername || "",
-          })
-        );
-        localStorage.setItem("role", user.role || "");
-      } catch {
-        // ignore
-      }
-
-      const headers = { ...authHeader() };
-
-      // Load student profile basics from existing jobseeker profile
-      fetch(`${API_BASE}/jobseeker/profile`, {
+    // Load student profile basics from existing jobseeker profile
+    fetch(`${API_BASE}/jobseeker/profile`, {
         headers,
         credentials: "include",
       })
@@ -168,149 +131,58 @@ export default function StudentDashboard() {
         .finally(() => {
           if (!cancelled) setGhLoading(false);
         });
-    })();
 
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [authUser?.id, navigate]);
+
+  if (!authUser) return null;
 
   const displayName = studentDisplayName(profile, authUser);
   const initial = (displayName || "S").trim().charAt(0).toUpperCase();
+  const githubStartupCount = Number(ghActivity?.githubStartupCount || 0);
+  const collabDisplay = Math.max(Number(collaborations || 0), githubStartupCount);
 
-  const handleLogout = async () => {
-    try {
-      await logoutUser();
-    } catch {
-      // ignore
+  const handleClaimReward = async () => {
+    const token = localStorage.getItem("token");
+    const startupId =
+      ghActivity?.topStartup?.startupId || startupCards[0]?.id || null;
+    if (!startupId) {
+      window.alert(
+        "No startup selected. Contribute to a linked repo first, or open Startup Explorer and note a startup — then try again from the dashboard."
+      );
+      navigate("/student/explore");
+      return;
     }
     try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("role");
-      localStorage.removeItem("user");
+      const res = await fetch("/api/rewards/claim", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          startupId,
+          offerTitle: "Swag Box",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(data.message || "Could not submit claim.");
+        return;
+      }
+      window.alert(
+        `Claim sent to ${data.claim?.startup?.name || "the startup"}! They will see it on their founder dashboard.`
+      );
     } catch {
-      // ignore
+      window.alert("Network error. Try again.");
     }
-    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen flex bg-[#050818] text-slate-100">
-      {/* Sidebar */}
-      <aside className="hidden md:flex w-60 flex-col bg-[#050818] border-r border-slate-800/80">
-        <div className="h-16 px-6 flex items-center border-b border-slate-800/80">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-xs font-bold text-white shadow-lg shadow-sky-500/40">
-              ST
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-50">
-                Student Space
-              </p>
-              <p className="text-[11px] text-slate-500">
-                Startup & Talent Hub
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <nav className="flex-1 px-4 py-4 text-sm space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 text-white">
-            <span className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center text-[11px]">
-              🏠
-            </span>
-            Dashboard
-          </button>
-
-          <button
-            onClick={() => navigate("/jobseeker/dashboard")}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
-          >
-            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
-              🔍
-            </span>
-            Job & Internship Search
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
-              🧪
-            </span>
-            Startup Explorer
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
-              🎖
-            </span>
-            Contributions & Rewards
-          </button>
-
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
-              📊
-            </span>
-            Analytics
-          </button>
-        </nav>
-
-        <div className="p-4 border-t border-slate-800/80 text-[11px] text-slate-500">
-          <p>
-            Tip: Contribute to startup repos to increase your collaboration
-            level.
-          </p>
-        </div>
-      </aside>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="h-16 px-4 md:px-8 flex items-center justify-between bg-[#050818]/95 border-b border-slate-800/80 backdrop-blur">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
-            <div className="relative w-full">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <circle cx="11" cy="11" r="6" />
-                  <path d="m20 20-4-4" />
-                </svg>
-              </span>
-              <input
-                type="text"
-                placeholder="Search startups, roles, or skills..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-700/80 bg-slate-900/70 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Notifications temporarily disabled */}
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-xs text-slate-400">Student</p>
-                <p className="text-sm font-medium text-slate-100">
-                  {authUser ? displayName : "…"}
-                </p>
-              </div>
-              <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-semibold text-slate-100">
-                {authUser ? initial : "…"}
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800"
-            >
-              Logout
-            </button>
-          </div>
-        </header>
-
-        {/* Body */}
-        <main className="flex-1 overflow-auto px-4 md:px-8 py-6 md:py-8 bg-[#050818] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),transparent_55%),radial-gradient(circle_at_bottom,_rgba(129,140,248,0.14),transparent_55%)]">
+    <>
           {/* Top row: profile + startup explorer summary */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Profile & skills panel (two-thirds) */}
@@ -507,7 +379,7 @@ export default function StudentDashboard() {
                 <div className="rounded-lg bg-slate-800/80 p-2">
                   <p className="text-slate-400">Startups</p>
                   <p className="mt-1 text-sm font-semibold text-slate-100">
-                    {collaborations || 0}
+                    {collabDisplay}
                   </p>
                 </div>
                 <div className="rounded-lg bg-slate-800/80 p-2">
@@ -540,14 +412,12 @@ export default function StudentDashboard() {
                   </p>
                 </div>
                 <div className="flex gap-2 text-[11px]">
-                  <button className="px-3 py-1 rounded-full bg-slate-900 text-white">
-                    Top Rated
-                  </button>
-                  <button className="px-3 py-1 rounded-full bg-slate-800 text-slate-200">
-                    AI
-                  </button>
-                  <button className="px-3 py-1 rounded-full bg-slate-800 text-slate-200">
-                    Open Source
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/explore")}
+                    className="px-3 py-1 rounded-full bg-sky-600/30 text-sky-200 border border-sky-500/40 hover:bg-sky-600/40"
+                  >
+                    View all startups
                   </button>
                 </div>
               </div>
@@ -606,7 +476,11 @@ export default function StudentDashboard() {
                 <p className="text-xs font-semibold text-slate-100">
                   Rewards & Offers
                 </p>
-                <button className="text-[11px] text-sky-300 font-medium">
+                <button
+                  type="button"
+                  onClick={() => navigate("/student/contributions")}
+                  className="text-[11px] text-sky-300 font-medium"
+                >
                   View all
                 </button>
               </div>
@@ -623,7 +497,11 @@ export default function StudentDashboard() {
                     sessions.
                   </p>
                 </div>
-                <button className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white text-indigo-600 hover:bg-slate-100">
+                <button
+                  type="button"
+                  onClick={handleClaimReward}
+                  className="mt-3 w-full text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-white text-indigo-600 hover:bg-slate-100"
+                >
                   Claim Reward
                 </button>
               </div>
@@ -660,19 +538,21 @@ export default function StudentDashboard() {
                 Startup Collaborations
               </p>
               <p className="text-sm font-semibold text-slate-100">
-                {collaborations} startups
+                {collabDisplay} startups
               </p>
               <p className="mt-1 text-[11px] text-slate-400">
-                Number of startups you have contributed to.
+                Platform approvals + GitHub-linked startup repos you contributed to (30d).
               </p>
-              <button className="mt-3 text-[11px] text-sky-300 font-medium">
+              <button
+                type="button"
+                onClick={() => navigate("/student/contributions")}
+                className="mt-3 text-[11px] text-sky-300 font-medium"
+              >
                 View contribution history →
               </button>
             </section>
           </div>
-        </main>
-      </div>
-    </div>
+    </>
   );
 }
 

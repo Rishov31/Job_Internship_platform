@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 // import NotificationBell from "../../components/NotificationBell";
 import { me, logoutUser } from "../../api/authApi";
@@ -22,7 +22,19 @@ export default function StartupDashboard() {
   });
   const [jobCards, setJobCards] = useState([]);
   const [ghSummary, setGhSummary] = useState(null);
+  const [rewardClaims, setRewardClaims] = useState([]);
+  const [ghContributor, setGhContributor] = useState(null);
+  const [awarding, setAwarding] = useState(false);
   const navigate = useNavigate();
+  const overviewRef = useRef(null);
+  const jobsRef = useRef(null);
+  const ossRef = useRef(null);
+  const fundingRef = useRef(null);
+  const mentorshipRef = useRef(null);
+
+  const scrollToPanel = (ref) => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   const recomputeStatsFromStartup = (s, prev) => {
     if (!s) return prev || stats;
@@ -146,20 +158,26 @@ export default function StartupDashboard() {
 
         const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-        const [jobStats, employerJobs, startupRes, ghRes] = await Promise.all([
-          getJobStats().catch(() => null),
-          getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
-          fetch(`/api/startups/me`, {
-            credentials: "include",
-            headers: authHeaders,
-          }).then((r) => (r.ok ? r.json() : null)),
-          fetch(`/api/startups/me/github/summary`, {
-            credentials: "include",
-            headers: authHeaders,
-          }).then((r) => (r.ok ? r.json() : null)),
-        ]);
+        const [jobStats, employerJobs, startupRes, ghRes, claimsRes] =
+          await Promise.all([
+            getJobStats().catch(() => null),
+            getEmployerJobs({ limit: 3 }).catch(() => ({ jobs: [] })),
+            fetch(`/api/startups/me`, {
+              credentials: "include",
+              headers: authHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+            fetch(`/api/startups/me/github/summary`, {
+              credentials: "include",
+              headers: authHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+            fetch(`/api/rewards/startup/me`, {
+              credentials: "include",
+              headers: authHeaders,
+            }).then((r) => (r.ok ? r.json() : null)),
+          ]);
 
         if (ghRes) setGhSummary(ghRes);
+        if (claimsRes?.claims) setRewardClaims(claimsRes.claims);
 
         if (startupRes?.completion) {
           setProfileCompletion(startupRes.completion);
@@ -206,6 +224,70 @@ export default function StartupDashboard() {
     navigate("/login");
   };
 
+  const handleAwardContributor = async () => {
+    if (!ghContributor?.login) return;
+    const pointsStr = window.prompt("Points to award (default 150)", "150");
+    if (pointsStr === null) return;
+    const points = Number(pointsStr) || 150;
+    const token = localStorage.getItem("token");
+    setAwarding(true);
+    try {
+      const res = await fetch("/api/contributions/founder/award", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          githubUsername: ghContributor.login,
+          points,
+          description: `Reward for ${ghContributor.count} recent commits (GitHub)`,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(data.message || "Could not award");
+        return;
+      }
+      window.alert(
+        `Awarded ${points} pts to ${data.student?.fullName || ghContributor.login}. They will see it under Contributions.`
+      );
+      setGhContributor(null);
+    } catch {
+      window.alert("Network error");
+    } finally {
+      setAwarding(false);
+    }
+  };
+
+  const updateClaimStatus = async (claimId, status) => {
+    const token = localStorage.getItem("token");
+    try {
+      const res = await fetch(`/api/rewards/${claimId}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(data.message || "Update failed");
+        return;
+      }
+      setRewardClaims((prev) =>
+        prev.map((c) =>
+          c._id === claimId ? { ...c, status: data.claim?.status || status } : c
+        )
+      );
+    } catch {
+      window.alert("Network error");
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-[#050818] text-slate-100">
       {/* Sidebar */}
@@ -225,7 +307,11 @@ export default function StartupDashboard() {
         </div>
 
         <nav className="flex-1 px-4 py-4 text-sm space-y-1">
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 text-white">
+          <button
+            type="button"
+            onClick={() => scrollToPanel(overviewRef)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 text-white"
+          >
             <span className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center text-[11px]">
               📈
             </span>
@@ -248,7 +334,8 @@ export default function StartupDashboard() {
           </button>
 
           <button
-            onClick={() => navigate("/employer/dashboard")}
+            type="button"
+            onClick={() => scrollToPanel(jobsRef)}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
           >
             <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
@@ -257,21 +344,33 @@ export default function StartupDashboard() {
             Job & Internship Posting
           </button>
 
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
+          <button
+            type="button"
+            onClick={() => scrollToPanel(ossRef)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
+          >
             <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
               🧑‍💻
             </span>
             Open Source Collaboration
           </button>
 
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
+          <button
+            type="button"
+            onClick={() => scrollToPanel(fundingRef)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
+          >
             <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
               💰
             </span>
             Funding & Capital
           </button>
 
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
+          <button
+            type="button"
+            onClick={() => scrollToPanel(mentorshipRef)}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
+          >
             <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
               🎓
             </span>
@@ -350,7 +449,7 @@ export default function StartupDashboard() {
             </div>
           )}
           {/* Top row: startup overview + job posting summary + funding card */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div ref={overviewRef} className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Startup Overview panel */}
             <section className="lg:col-span-2 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
               <div className="flex items-center justify-between mb-3">
@@ -417,7 +516,10 @@ export default function StartupDashboard() {
             </section>
 
             {/* Funding & capital management compact card */}
-            <section className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
+            <section
+              ref={fundingRef}
+              className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur"
+            >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-slate-100">
                   Funding & Capital
@@ -444,7 +546,10 @@ export default function StartupDashboard() {
           {/* Middle row: Job & Internship posting + Open Source collaboration */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Job & Internship Posting */}
-            <section className="lg:col-span-2 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
+            <section
+              ref={jobsRef}
+              className="lg:col-span-2 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur"
+            >
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-slate-100">
                   Job & Internship Posting
@@ -497,7 +602,10 @@ export default function StartupDashboard() {
             </section>
 
             {/* Open Source Collaboration */}
-            <section className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 flex flex-col backdrop-blur">
+            <section
+              ref={ossRef}
+              className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 flex flex-col backdrop-blur"
+            >
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-slate-100">
                   Open Source Collaboration
@@ -528,6 +636,74 @@ export default function StartupDashboard() {
               </div>
             </section>
           </div>
+
+          {/* Student reward claims (Swag Box etc.) */}
+          <section className="mb-6 bg-slate-900/70 rounded-2xl shadow-xl border border-amber-500/20 p-5 backdrop-blur">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-100">
+                  Reward claims from students
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Shown when students tap &quot;Claim Reward&quot; on their dashboard (linked to your startup).
+                </p>
+              </div>
+            </div>
+            {rewardClaims.length === 0 ? (
+              <p className="text-[11px] text-slate-500">No pending claims yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {rewardClaims.map((c) => (
+                  <li
+                    key={c._id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-slate-700 bg-slate-800/40 px-3 py-2 text-[11px]"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-100">
+                        {c.offerTitle}{" "}
+                        <span className="text-slate-500 font-normal">
+                          — {c.student?.fullName || "Student"}
+                        </span>
+                      </p>
+                      <p className="text-slate-500">{c.student?.email}</p>
+                      <p className="text-amber-200/90 mt-1">
+                        Status: <span className="capitalize">{c.status}</span>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      {c.status === "pending" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => updateClaimStatus(c._id, "acknowledged")}
+                            className="px-3 py-1 rounded-lg bg-slate-700 text-slate-100 hover:bg-slate-600"
+                          >
+                            Acknowledge
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateClaimStatus(c._id, "fulfilled")}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+                          >
+                            Mark fulfilled
+                          </button>
+                        </>
+                      )}
+                      {c.status === "acknowledged" && (
+                        <button
+                          type="button"
+                          onClick={() => updateClaimStatus(c._id, "fulfilled")}
+                          className="px-3 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500"
+                        >
+                          Mark fulfilled
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {/* GitHub: recent contributors across linked repos (7d) */}
           <section className="mb-6 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
@@ -574,16 +750,18 @@ export default function StartupDashboard() {
                 </span>
               ) : (
                 ghSummary.topContributors.map((t) => (
-                  <span
+                  <button
                     key={t.login}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-600 text-[11px] text-slate-200"
+                    type="button"
+                    onClick={() => setGhContributor(t)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/90 border border-slate-600 text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800 cursor-pointer"
                   >
                     <span className="text-sky-300 font-mono">@{t.login}</span>
                     <span className="text-slate-400">·</span>
                     <span className="text-emerald-400 font-semibold">
                       {t.count} commits
                     </span>
-                  </span>
+                  </button>
                 ))
               )}
             </div>
@@ -592,7 +770,10 @@ export default function StartupDashboard() {
           {/* Bottom row: Mentorship & Investor connect style cards */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mentorship & Guidance */}
-            <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <section
+              ref={mentorshipRef}
+              className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5"
+            >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-slate-700">
                   Mentorship & Guidance
@@ -629,6 +810,56 @@ export default function StartupDashboard() {
               </div>
             </section>
           </div>
+
+          {ghContributor && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-2xl border border-slate-600 bg-slate-900 p-5 shadow-2xl text-slate-100">
+                <p className="text-sm font-semibold text-slate-50">Contributor</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  GitHub activity on your linked repos (last 7 days).
+                </p>
+                <div className="mt-4 rounded-xl bg-slate-800/80 border border-slate-700 p-3 text-[11px] space-y-2">
+                  <p>
+                    <span className="text-slate-500">Login</span>{" "}
+                    <span className="font-mono text-sky-300">@{ghContributor.login}</span>
+                  </p>
+                  <p>
+                    <span className="text-slate-500">Commits</span>{" "}
+                    <span className="text-emerald-400 font-semibold">{ghContributor.count}</span>
+                  </p>
+                  <a
+                    href={`https://github.com/${ghContributor.login}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-sky-400 hover:underline"
+                  >
+                    Open GitHub profile →
+                  </a>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-3">
+                  If they use the same GitHub username on HireMe, you can award platform points
+                  (creates an approved contribution).
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={awarding}
+                    onClick={handleAwardContributor}
+                    className="flex-1 min-w-[120px] px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-50"
+                  >
+                    {awarding ? "Awarding…" : "Award points / reward"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGhContributor(null)}
+                    className="px-3 py-2 rounded-lg border border-slate-600 text-xs text-slate-300 hover:bg-slate-800"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

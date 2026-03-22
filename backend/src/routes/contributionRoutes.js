@@ -14,6 +14,7 @@ router.get("/github/activity", requireRole("jobseeker"), ghCtrl.getGithubActivit
 
 // Startup founder routes
 router.get("/startup/me", requireRole("employer"), ctrl.listStartupContributions);
+router.post("/founder/award", requireRole("employer"), ctrl.founderAwardByGithub);
 
 // Founder / admin can update contribution status
 router.patch(

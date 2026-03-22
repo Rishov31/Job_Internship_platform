@@ -312,21 +312,32 @@ function aggregateByDate(map, isoDateStr, increment = 1) {
   map[day] = (map[day] || 0) + increment;
 }
 
+/** YYYY-MM-DD in UTC — must match keys from aggregateByDate (GitHub ISO timestamps). */
+function utcTodayKey() {
+  const t = new Date();
+  return t.toISOString().split("T")[0];
+}
+
+/** Previous UTC calendar day key */
+function utcDateKeyMinusDays(keyYmd, days) {
+  const [y, m, d] = keyYmd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d - days));
+  return dt.toISOString().split("T")[0];
+}
+
 function contributionLevel(total30d) {
   if (total30d >= 150) return { level: "Gold", tier: "gold" };
   if (total30d >= 50) return { level: "Silver", tier: "silver" };
   return { level: "Bronze", tier: "bronze" };
 }
 
-function computeStreak(byDate, endDate) {
+function computeStreak(byDate) {
   let streak = 0;
-  const d = new Date(endDate);
-  d.setHours(0, 0, 0, 0);
+  let key = utcTodayKey();
   for (let i = 0; i < 365; i += 1) {
-    const key = d.toISOString().split("T")[0];
     if ((byDate[key] || 0) > 0) {
       streak += 1;
-      d.setDate(d.getDate() - 1);
+      key = utcDateKeyMinusDays(key, 1);
     } else {
       break;
     }
@@ -334,15 +345,21 @@ function computeStreak(byDate, endDate) {
   return streak;
 }
 
-/** Sum contributions in a rolling window of `days` ending `endOffset` days ago from today */
+/** Sum contributions in a rolling window of `days` ending `endOffset` UTC days ago from today */
 function sumRollingDays(byDate, days, endOffset) {
   let total = 0;
-  const end = new Date();
-  end.setHours(0, 0, 0, 0);
-  end.setDate(end.getDate() - endOffset);
+  const today = new Date();
+  const end = new Date(
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() - endOffset
+    )
+  );
   for (let i = 0; i < days; i += 1) {
-    const d = new Date(end);
-    d.setDate(d.getDate() - i);
+    const d = new Date(
+      Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() - i)
+    );
     const key = d.toISOString().split("T")[0];
     total += byDate[key] || 0;
   }
@@ -414,6 +431,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
       topStartup: null,
       totalCommitsAndPRs: 0,
       reposScanned: 0,
+      githubStartupCount: 0,
       message: "No GitHub repositories registered by startups yet.",
     };
   }
@@ -488,15 +506,20 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
 
   const chartDays = 14;
   const chart = [];
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  const today = new Date();
+  const uy = today.getUTCFullYear();
+  const um = today.getUTCMonth();
+  const ud = today.getUTCDate();
   for (let i = chartDays - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
+    const d = new Date(Date.UTC(uy, um, ud - i));
     const key = d.toISOString().split("T")[0];
     const count = byDate[key] || 0;
     chart.push({
-      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      date: d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        timeZone: "UTC",
+      }),
       fullDate: key,
       count,
     });
@@ -511,14 +534,17 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
     pctChange = 100;
   }
 
-  const streak = computeStreak(byDate, now);
+  const streak = computeStreak(byDate);
 
   const total30d = Object.entries(byDate).reduce((sum, [day, c]) => {
-    const dt = new Date(day);
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
+    const dt = new Date(`${day}T00:00:00.000Z`);
+    const cutoff = new Date(Date.UTC(uy, um, ud - 30));
     return dt >= cutoff ? sum + c : sum;
   }, 0);
+
+  const githubStartupCount = Object.keys(byStartup).filter(
+    (k) => !k.startsWith("_name_")
+  ).length;
 
   return {
     githubUsername,
@@ -541,6 +567,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
     topStartup,
     totalCommitsAndPRs: total,
     reposScanned,
+    githubStartupCount,
     zeroActivityTip,
   };
 }

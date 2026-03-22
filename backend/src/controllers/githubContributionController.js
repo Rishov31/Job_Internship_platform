@@ -24,6 +24,7 @@ exports.getGithubActivity = async (req, res, next) => {
         topStartup: null,
         totalCommitsAndPRs: 0,
         reposScanned: 0,
+        githubStartupCount: 0,
       });
     }
 
@@ -52,6 +53,7 @@ exports.getGithubActivity = async (req, res, next) => {
         topStartup: null,
         totalCommitsAndPRs: 0,
         reposScanned: 0,
+        githubStartupCount: 0,
       });
     }
     next(e);

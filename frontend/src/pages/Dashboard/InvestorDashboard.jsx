@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { me, logoutUser } from "../../api/authApi";
 // import NotificationBell from "../../components/NotificationBell";
@@ -17,6 +17,16 @@ export default function InvestorDashboard() {
   });
   const [savingProfile, setSavingProfile] = useState(false);
   const navigate = useNavigate();
+  const [navSection, setNavSection] = useState("discovery");
+  const discoveryRef = useRef(null);
+  const portfolioRef = useRef(null);
+  const transactionsRef = useRef(null);
+  const analyticsRef = useRef(null);
+
+  const scrollToSection = (ref, id) => {
+    setNavSection(id);
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => {
     if (!investorProfile) return;
@@ -170,26 +180,74 @@ export default function InvestorDashboard() {
           <div className="px-3 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-[0.18em]">
             Discovery
           </div>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-900 text-white text-sm font-medium">
-            <span className="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center text-xs">
+          <button
+            type="button"
+            onClick={() => scrollToSection(discoveryRef, "discovery")}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium ${
+              navSection === "discovery"
+                ? "bg-slate-900 text-white"
+                : "hover:bg-slate-800/80 text-slate-200"
+            }`}
+          >
+            <span
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-xs ${
+                navSection === "discovery" ? "bg-white/10" : "bg-slate-800"
+              }`}
+            >
               🔍
             </span>
             Startup Discovery
           </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-7 h-7 rounded-md bg-slate-800 flex items-center justify-center text-xs">
+          <button
+            type="button"
+            onClick={() => scrollToSection(portfolioRef, "portfolio")}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${
+              navSection === "portfolio"
+                ? "bg-slate-900 text-white"
+                : "hover:bg-slate-800/80 text-slate-200"
+            }`}
+          >
+            <span
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-xs ${
+                navSection === "portfolio" ? "bg-white/10" : "bg-slate-800"
+              }`}
+            >
               💼
             </span>
             Portfolio
           </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-7 h-7 rounded-md bg-slate-800 flex items-center justify-center text-xs">
+          <button
+            type="button"
+            onClick={() => scrollToSection(transactionsRef, "transactions")}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${
+              navSection === "transactions"
+                ? "bg-slate-900 text-white"
+                : "hover:bg-slate-800/80 text-slate-200"
+            }`}
+          >
+            <span
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-xs ${
+                navSection === "transactions" ? "bg-white/10" : "bg-slate-800"
+              }`}
+            >
               📄
             </span>
             Transactions
           </button>
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200">
-            <span className="w-7 h-7 rounded-md bg-slate-800 flex items-center justify-center text-xs">
+          <button
+            type="button"
+            onClick={() => scrollToSection(analyticsRef, "analytics")}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg ${
+              navSection === "analytics"
+                ? "bg-slate-900 text-white"
+                : "hover:bg-slate-800/80 text-slate-200"
+            }`}
+          >
+            <span
+              className={`w-7 h-7 rounded-md flex items-center justify-center text-xs ${
+                navSection === "analytics" ? "bg-white/10" : "bg-slate-800"
+              }`}
+            >
               📊
             </span>
             Analytics
@@ -256,7 +314,10 @@ export default function InvestorDashboard() {
           {/* Top row: discovery + financial insights + invest module */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
             {/* Startup Discovery */}
-            <section className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
+            <section
+              ref={discoveryRef}
+              className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur scroll-mt-24"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-slate-100">
@@ -323,7 +384,10 @@ export default function InvestorDashboard() {
             </section>
 
             {/* Financial Insights */}
-            <section className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
+            <section
+              ref={analyticsRef}
+              className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur scroll-mt-24"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-slate-100">
@@ -357,7 +421,10 @@ export default function InvestorDashboard() {
             </section>
 
             {/* Investment Module */}
-            <section className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
+            <section
+              ref={transactionsRef}
+              className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur scroll-mt-24"
+            >
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <h2 className="text-sm font-semibold text-slate-100">
@@ -471,7 +538,10 @@ export default function InvestorDashboard() {
           </section>
 
           {/* Bottom row: Portfolio overview */}
-          <section className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur">
+          <section
+            ref={portfolioRef}
+            className="bg-slate-900/70 rounded-2xl border border-slate-700/70 shadow-xl p-5 backdrop-blur scroll-mt-24"
+          >
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-semibold text-slate-100">

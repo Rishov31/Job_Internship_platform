@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
+const { normalizeGithubUsernameInput } = require("../utils/githubUsername");
 const JobSeekerProfile = require("../models/JobSeekerProfile");
 const Startup = require("../models/Startup");
 const InvestorProfile = require("../models/InvestorProfile");
@@ -154,7 +155,8 @@ exports.me = async (req, res, next) => {
       email: user.email,
       role: user.role,
       isAdmin: user.isAdmin,
-      githubUsername: user.githubUsername || "",
+      githubUsername:
+        normalizeGithubUsernameInput(user.githubUsername || "") || "",
     });
   } catch (err) {
     next(err);

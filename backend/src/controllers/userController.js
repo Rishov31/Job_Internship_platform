@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const { normalizeGithubUsernameInput } = require("../utils/githubUsername");
 
 exports.getMe = async (req, res, next) => {
   try {
@@ -9,7 +10,8 @@ exports.getMe = async (req, res, next) => {
       fullName: user.fullName,
       email: user.email,
       role: user.role,
-      githubUsername: user.githubUsername || "",
+      githubUsername:
+        normalizeGithubUsernameInput(user.githubUsername || "") || "",
     });
   } catch (e) {
     next(e);
@@ -22,11 +24,7 @@ exports.updateMe = async (req, res, next) => {
     const updates = {};
     for (const key of allowed) if (key in req.body) updates[key] = req.body[key];
     if (updates.githubUsername !== undefined) {
-      const g = String(updates.githubUsername || "")
-        .trim()
-        .replace(/^@/, "")
-        .toLowerCase();
-      updates.githubUsername = g || null;
+      updates.githubUsername = normalizeGithubUsernameInput(updates.githubUsername);
     }
     const user = await User.findByIdAndUpdate(req.user.id, updates, { new: true });
     res.json({
@@ -37,7 +35,8 @@ exports.updateMe = async (req, res, next) => {
       avatarUrl: user.avatarUrl,
       phone: user.phone,
       bio: user.bio,
-      githubUsername: user.githubUsername || "",
+      githubUsername:
+        normalizeGithubUsernameInput(user.githubUsername || "") || "",
     });
   } catch (e) {
     next(e);

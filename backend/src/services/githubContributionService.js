@@ -26,37 +26,183 @@ function parseGithubRepoUrl(raw) {
   return { owner: m[1], repo };
 }
 
-async function fetchCommitsForAuthor(owner, repo, githubUsername, sinceIso) {
-  const headers = githubHeaders();
-  let page = 1;
-  const all = [];
-  while (page <= 8) {
-    try {
-      const { data } = await axios.get(
-        `${GITHUB_API}/repos/${owner}/${repo}/commits`,
-        {
-          headers,
-          params: {
-            author: githubUsername,
-            since: sinceIso,
-            per_page: 100,
-            page,
-          },
-          timeout: 15000,
-        }
-      );
-      if (!Array.isArray(data) || !data.length) break;
-      all.push(...data);
-      if (data.length < 100) break;
-      page += 1;
-    } catch (e) {
-      if (e.response?.status === 404 || e.response?.status === 403) {
-        break;
-      }
-      throw e;
+const MAX_BRANCHES_DEFAULT = parseInt(
+  process.env.GITHUB_MAX_BRANCHES_PER_REPO || "25",
+  10
+);
+const MAX_PAGES_PER_BRANCH = parseInt(
+  process.env.GITHUB_MAX_PAGES_PER_BRANCH || "4",
+  10
+);
+
+/** Prefer default-like branches first, then keep API order (up to `max`). */
+function prioritizeBranchNames(names, max) {
+  if (!Array.isArray(names) || !names.length) return [];
+  const preferred = ["main", "master", "develop", "dev", "staging", "release"];
+  const out = [];
+  const used = new Set();
+  for (const p of preferred) {
+    if (names.includes(p) && !used.has(p)) {
+      out.push(p);
+      used.add(p);
     }
   }
-  return all;
+  for (const n of names) {
+    if (!used.has(n)) {
+      out.push(n);
+      used.add(n);
+      if (out.length >= max) break;
+    }
+  }
+  return out;
+}
+
+/**
+ * GitHub "List commits" only walks the default branch unless you pass `sha` (branch/tag).
+ * This loads branch tips, then fetches commits per branch for the given author — deduped by SHA.
+ */
+async function fetchCommitsForAuthorAcrossBranches(
+  owner,
+  repo,
+  githubUsername,
+  sinceIso,
+  options = {}
+) {
+  const maxBranches = Math.min(
+    Number(options.maxBranches) || MAX_BRANCHES_DEFAULT,
+    50
+  );
+  const maxPages = Math.min(Number(options.maxPagesPerBranch) || MAX_PAGES_PER_BRANCH, 10);
+  const headers = githubHeaders();
+  const seenSha = new Set();
+  const out = [];
+
+  async function pullBranch(shaRef) {
+    let page = 1;
+    while (page <= maxPages) {
+      try {
+        const params = {
+          author: githubUsername,
+          since: sinceIso,
+          per_page: 100,
+          page,
+        };
+        if (shaRef) params.sha = shaRef;
+
+        const { data } = await axios.get(
+          `${GITHUB_API}/repos/${owner}/${repo}/commits`,
+          { headers, params, timeout: 15000 }
+        );
+        if (!Array.isArray(data) || !data.length) break;
+        for (const c of data) {
+          if (c.sha && !seenSha.has(c.sha)) {
+            seenSha.add(c.sha);
+            out.push(c);
+          }
+        }
+        if (data.length < 100) break;
+        page += 1;
+      } catch (e) {
+        if (e.response?.status === 404 || e.response?.status === 403) break;
+        throw e;
+      }
+    }
+  }
+
+  let branchNames = [];
+  try {
+    const { data } = await axios.get(
+      `${GITHUB_API}/repos/${owner}/${repo}/branches`,
+      {
+        headers,
+        params: { per_page: 100, page: 1 },
+        timeout: 15000,
+      }
+    );
+    const raw = Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+    branchNames = prioritizeBranchNames(raw, maxBranches);
+  } catch (e) {
+    if (e.response?.status !== 404 && e.response?.status !== 403) {
+      // eslint-disable-next-line no-console
+      console.warn(`Branches list ${owner}/${repo}:`, e.message);
+    }
+  }
+
+  if (!branchNames.length) {
+    await pullBranch(undefined);
+    return out;
+  }
+
+  for (const name of branchNames) {
+    await pullBranch(name);
+  }
+
+  return out;
+}
+
+/**
+ * All recent commits (any author) across branches — for startup contributor leaderboard.
+ */
+async function fetchRecentCommitsAcrossBranches(owner, repo, sinceIso, options = {}) {
+  const maxBranches = Math.min(
+    Number(options.maxBranches) || 12,
+    30
+  );
+  const maxPages = Math.min(Number(options.maxPagesPerBranch) || 2, 5);
+  const headers = githubHeaders();
+  const seenSha = new Set();
+  const out = [];
+
+  async function pullBranch(shaRef) {
+    let page = 1;
+    while (page <= maxPages) {
+      try {
+        const params = { since: sinceIso, per_page: 100, page };
+        if (shaRef) params.sha = shaRef;
+        const { data } = await axios.get(
+          `${GITHUB_API}/repos/${owner}/${repo}/commits`,
+          { headers, params, timeout: 15000 }
+        );
+        if (!Array.isArray(data) || !data.length) break;
+        for (const c of data) {
+          if (c.sha && !seenSha.has(c.sha)) {
+            seenSha.add(c.sha);
+            out.push(c);
+          }
+        }
+        if (data.length < 100) break;
+        page += 1;
+      } catch (e) {
+        if (e.response?.status === 404 || e.response?.status === 403) break;
+        throw e;
+      }
+    }
+  }
+
+  let branchNames = [];
+  try {
+    const { data } = await axios.get(
+      `${GITHUB_API}/repos/${owner}/${repo}/branches`,
+      {
+        headers,
+        params: { per_page: 100, page: 1 },
+        timeout: 15000,
+      }
+    );
+    const raw = Array.isArray(data) ? data.map((b) => b.name).filter(Boolean) : [];
+    branchNames = prioritizeBranchNames(raw, maxBranches);
+  } catch {
+    branchNames = [];
+  }
+
+  if (!branchNames.length) {
+    await pullBranch(undefined);
+    return out;
+  }
+  for (const name of branchNames) {
+    await pullBranch(name);
+  }
+  return out;
 }
 
 async function fetchPullRequestsForRepo(owner, repo) {
@@ -211,7 +357,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
   let reposScanned = 0;
   for (const item of repoList) {
     try {
-      const commits = await fetchCommitsForAuthor(
+      const commits = await fetchCommitsForAuthorAcrossBranches(
         item.owner,
         item.repo,
         githubUsername,
@@ -246,6 +392,12 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
   }
 
   const total = Object.values(byDate).reduce((a, b) => a + b, 0);
+
+  let zeroActivityTip = null;
+  if (total === 0 && reposScanned > 0) {
+    zeroActivityTip =
+      "Still zero? GitHub matches the `author` filter to your GitHub account email. Run `git config user.email` and ensure that email is added in GitHub → Settings → Emails (and verified).";
+  }
 
   let topStartup = null;
   let topCount = 0;
@@ -317,6 +469,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
     topStartup,
     totalCommitsAndPRs: total,
     reposScanned,
+    zeroActivityTip,
   };
 }
 
@@ -339,26 +492,16 @@ async function getStartupRepoContributors(ownerUserId) {
 
   for (const item of repoList) {
     try {
-      const headers = githubHeaders();
-      let page = 1;
-      while (page <= 3) {
-        const { data } = await axios.get(
-          `${GITHUB_API}/repos/${item.owner}/${item.repo}/commits`,
-          {
-            headers,
-            params: { since: sinceIso, per_page: 100, page },
-            timeout: 15000,
-          }
-        );
-        if (!Array.isArray(data) || !data.length) break;
-        for (const c of data) {
-          const login =
-            c.author?.login || c.commit?.author?.name || "unknown";
-          if (!login || login === "web-flow") continue;
-          authorCounts[login] = (authorCounts[login] || 0) + 1;
-        }
-        if (data.length < 100) break;
-        page += 1;
+      const commits = await fetchRecentCommitsAcrossBranches(
+        item.owner,
+        item.repo,
+        sinceIso
+      );
+      for (const c of commits) {
+        const login =
+          c.author?.login || c.commit?.author?.name || "unknown";
+        if (!login || login === "web-flow") continue;
+        authorCounts[login] = (authorCounts[login] || 0) + 1;
       }
     } catch (e) {
       // eslint-disable-next-line no-console

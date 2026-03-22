@@ -609,9 +609,10 @@ export default function JobSeekerProfile() {
               <div className="md:col-span-2 rounded-xl border border-slate-700/80 bg-slate-900/40 p-4">
                 <label className={lbl}>GitHub username</label>
                 <p className="text-[11px] text-slate-500 mb-2">
-                  Powers live commit/PR graphs on your student dashboard (no{" "}
-                  <code className="text-slate-400">@</code>). Must match your
-                  GitHub login.
+                  Use your GitHub <strong>username</strong> (e.g.{" "}
+                  <code className="text-sky-300">rishov31</code>) or profile URL — we
+                  strip it automatically. Commits must use a{" "}
+                  <strong>git email</strong> linked in GitHub → Settings → Emails.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   <input

@@ -437,8 +437,9 @@ export default function StudentDashboard() {
                 </div>
               </div>
               <p className="text-xs text-slate-400 mb-2">
-                Live GitHub activity on startup repos listed in Explorer (commits +
-                merged PRs).
+                Live GitHub activity across startup repos (all linked branches, not
+                only <code className="text-sky-400">main</code>) — commits + merged
+                PRs.
               </p>
               {ghActivity?.needsGithubUsername && (
                 <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
@@ -494,9 +495,14 @@ export default function StudentDashboard() {
               </div>
               <p className="text-[10px] text-slate-500 mt-1">
                 {ghActivity?.reposScanned != null && ghActivity.success
-                  ? `Scanning ${ghActivity.reposScanned} repo(s) from startups.`
+                  ? `Scanning ${ghActivity.reposScanned} repo(s) from startups (multi-branch).`
                   : ""}
               </p>
+              {ghActivity?.zeroActivityTip && ghActivity.success && (
+                <p className="text-[10px] text-amber-200/90 mt-2 leading-snug border border-amber-500/30 rounded-lg px-2 py-1.5 bg-amber-500/10">
+                  {ghActivity.zeroActivityTip}
+                </p>
+              )}
               <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
                   <p className="text-slate-400">Startups</p>

@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const { normalizeGithubUsernameInput } = require("../utils/githubUsername");
 const { getStudentGithubActivity } = require("../services/githubContributionService");
 
 /**
@@ -10,7 +11,7 @@ exports.getGithubActivity = async (req, res, next) => {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const gh = (user.githubUsername || "").trim();
+    const gh = normalizeGithubUsernameInput(user.githubUsername || "") || "";
     if (!gh) {
       return res.json({
         success: false,

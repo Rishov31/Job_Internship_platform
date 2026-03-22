@@ -25,6 +25,7 @@ export default function StartupProfile() {
     githubUrl: "",
   });
   const [activeTab, setActiveTab] = useState("company");
+  const backupRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,7 +147,6 @@ export default function StartupProfile() {
 
   const pct = editing ? liveCompletion : completion.completionPercentage;
   const showEdit = completion.isProfileComplete;
-  const backupRef = useRef(null);
 
   const startEdit = () => {
     backupRef.current = JSON.parse(JSON.stringify(form));

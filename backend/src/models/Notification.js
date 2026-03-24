@@ -18,6 +18,8 @@ const notificationSchema = new mongoose.Schema(
         "application_viewed",
         "application_shortlisted",
         "application_rejected",
+        "application_accepted",
+        "application_reviewing",
         "interview_scheduled",
         "interview_reminder",
         "interview_result",

@@ -7,6 +7,7 @@ const ctrl = require("../controllers/startupController");
 // Public / semi-public routes
 router.get("/explore", ctrl.exploreStartups);
 router.get("/:id/growth", ctrl.getStartupGrowth);
+router.get("/:id/jobs", ctrl.getStartupJobs);
 router.get("/:id/overview", ctrl.getStartupOverview);
 
 // Authenticated founder routes

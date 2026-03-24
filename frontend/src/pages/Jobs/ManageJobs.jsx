@@ -246,6 +246,12 @@ export default function ManageJobs() {
                           Edit
                         </Link>
                         <Link
+                          to={`/employer/jobs/${job._id}/applications`}
+                          className="px-3 py-1 text-sm bg-emerald-100 text-emerald-900 rounded-md hover:bg-emerald-200"
+                        >
+                          Applications
+                        </Link>
+                        <Link
                           to={`/jobs/${job._id}`}
                           className="px-3 py-1 text-sm bg-gray-100 text-gray-800 rounded-md hover:bg-gray-200"
                         >

@@ -16,6 +16,7 @@ import StudentContributions from "./pages/Dashboard/StudentContributions";
 import StudentAnalytics from "./pages/Dashboard/StudentAnalytics";
 import StudentMentorship from "./pages/Dashboard/StudentMentorship";
 import StudentResources from "./pages/Dashboard/StudentResources";
+import StudentApplications from "./pages/Dashboard/StudentApplications";
 import StartupDashboard from "./pages/Dashboard/StartupDashboard";
 import StartupProfile from "./pages/Dashboard/StartupProfile";
 
@@ -29,6 +30,9 @@ import JobSeekerProfile from "./pages/Dashboard/JobSeekerProfile";
 import JobSeekerApplications from "./pages/Dashboard/JobSeekerApplications";
 import JobSeekerJobList from "./pages/Jobs/JobSeekerJobList";
 import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
+import EmployerJobApplications from "./pages/Jobs/EmployerJobApplications";
+import StudentStartupDetail from "./pages/Dashboard/StudentStartupDetail";
+import CodingInterviewRoom from "./pages/Interview/CodingInterviewRoom";
 
 // Internship components
 import InternshipList from "./pages/Internships/InternshipList";
@@ -59,6 +63,7 @@ export default function App() {
         <Route path="/employer/post-job" element={<PostJob />} />
         <Route path="/employer/jobs" element={<ManageJobs />} />
         <Route path="/employer/jobs/:id/edit" element={<EditJob />} />
+        <Route path="/employer/jobs/:jobId/applications" element={<EmployerJobApplications />} />
 
         {/* Public Job Details */}
         <Route path="/jobs/:id" element={<JobDetails />} />
@@ -67,7 +72,9 @@ export default function App() {
       <Route path="/student" element={<StudentLayout />}>
         <Route index element={<Navigate to="/student/dashboard" replace />} />
         <Route path="dashboard" element={<StudentDashboard />} />
+        <Route path="applications" element={<StudentApplications />} />
         <Route path="explore" element={<StudentStartupExplorer />} />
+        <Route path="explore/:startupId" element={<StudentStartupDetail />} />
         <Route path="contributions" element={<StudentContributions />} />
         <Route path="mentorship" element={<StudentMentorship />} />
         <Route path="analytics" element={<StudentAnalytics />} />
@@ -113,6 +120,9 @@ export default function App() {
 
       {/* Notifications Route */}
       <Route path="/notifications" element={<Notifications />} />
+
+      {/* Coding interview: video + Monaco + chat (employer + jobseeker) */}
+      <Route path="/interview/coding/:sessionId" element={<CodingInterviewRoom />} />
       </Routes>
   );
 }

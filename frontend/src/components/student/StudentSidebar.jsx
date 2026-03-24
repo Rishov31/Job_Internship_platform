@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const items = [
   { path: "/student/dashboard", label: "Dashboard", icon: "🏠" },
+  { path: "/student/applications", label: "Applications", icon: "📋" },
   { path: "/jobseeker/jobs", label: "Job & Internship Search", icon: "🔍" },
   { path: "/student/explore", label: "Startup Explorer", icon: "🧪" },
   { path: "/student/resources", label: "Career Resources", icon: "📚" },
@@ -33,13 +34,16 @@ export default function StudentSidebar() {
         {items.map(({ path, label, icon }) => {
           const isJobseeker = path.startsWith("/jobseeker");
           const isResources = path === "/student/resources";
+          const isApplications = path === "/student/applications";
           const active = isJobseeker
             ? location.pathname.startsWith("/jobseeker")
             : isResources
               ? location.pathname.startsWith("/student/resources")
-              : location.pathname === path ||
-                (path === "/student/dashboard" &&
-                  location.pathname === "/student");
+              : isApplications
+                ? location.pathname === "/student/applications"
+                : location.pathname === path ||
+                  (path === "/student/dashboard" &&
+                    location.pathname === "/student");
 
           return (
             <button

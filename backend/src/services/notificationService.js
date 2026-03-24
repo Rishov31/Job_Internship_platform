@@ -88,6 +88,7 @@ class NotificationService {
 
         case 'application_submitted':
         case 'application_viewed':
+        case 'application_reviewing':
         case 'application_shortlisted':
         case 'application_rejected':
         case 'application_accepted':

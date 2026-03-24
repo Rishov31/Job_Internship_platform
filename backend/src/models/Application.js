@@ -20,6 +20,8 @@ const applicationSchema = new mongoose.Schema(
     },
     appliedAt: { type: Date, default: Date.now, index: true },
     lastUpdated: { type: Date, default: Date.now },
+    /** Interview notes, coding session id, etc. */
+    metadata: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );

@@ -1,4 +1,5 @@
 const Job = require("../models/Job");
+const Startup = require("../models/Startup");
 const ScrapedJob = require("../models/ScrapedJob");
 const SavedJob = require("../models/SavedJob");
 const User = require("../models/User");
@@ -119,10 +120,23 @@ exports.createJob = async (req, res, next) => {
       }
     }
 
+    const startup = await Startup.findOne({ owner: req.user.id }).select("_id");
+    if (startup) {
+      jobData.startup = startup._id;
+    }
+
     const job = await Job.create(jobData);
-    
+
+    if (startup) {
+      const openCount = await Job.countDocuments({
+        startup: startup._id,
+        status: "active",
+      });
+      await Startup.findByIdAndUpdate(startup._id, { openPositions: openCount });
+    }
+
     // Populate employer details
-    await job.populate('employer', 'fullName email companyDetails');
+    await job.populate("employer", "fullName email companyDetails");
     
     // Create notification for employer (job published successfully)
     await notificationService.createNotification({

@@ -72,6 +72,7 @@ export default function StudentDashboard() {
   const [ghLoading, setGhLoading] = useState(true);
   /** null until first load of /contributions/student/me */
   const [contributions, setContributions] = useState(null);
+  const [appSummary, setAppSummary] = useState({ total: 0, interviews: 0 });
   const navigate = useNavigate();
 
   const startupPointsChartData = useMemo(
@@ -186,6 +187,24 @@ export default function StudentDashboard() {
           if (!cancelled) setGhLoading(false);
         });
 
+      fetch(`${API_BASE}/jobseeker/applications`, {
+        headers,
+        credentials: "include",
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (cancelled || !data?.applications) return;
+          const apps = data.applications;
+          const interviews = apps.filter(
+            (a) =>
+              a.status === "interview" ||
+              a.metadata?.interview ||
+              a.metadata?.interviewSessionId
+          ).length;
+          setAppSummary({ total: apps.length, interviews });
+        })
+        .catch(() => {});
+
     return () => {
       cancelled = true;
     };
@@ -237,6 +256,30 @@ export default function StudentDashboard() {
 
   return (
     <>
+          {/* Job applications (summary) */}
+          <section className="mb-6 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 backdrop-blur flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-slate-100">Applications</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {appSummary.total} job application{appSummary.total === 1 ? "" : "s"}
+                {appSummary.interviews > 0 && (
+                  <span className="text-violet-300">
+                    {" "}
+                    · {appSummary.interviews} upcoming interview
+                    {appSummary.interviews === 1 ? "" : "s"}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/student/applications")}
+              className="text-xs font-semibold px-4 py-2 rounded-xl bg-sky-600/90 text-white hover:bg-sky-500 border border-sky-500/40"
+            >
+              View all applications
+            </button>
+          </section>
+
           {/* Top row: profile + startup explorer summary */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Profile & skills panel (two-thirds) */}

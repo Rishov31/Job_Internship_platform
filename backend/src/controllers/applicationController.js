@@ -175,7 +175,18 @@ exports.updateApplicationStatus = async (req, res, next) => {
       accepted: 'Congratulations! Your application has been accepted',
     };
 
-    const notificationType = `application_${status}`;
+    /** Must match Notification.type enum (not `application_${status}` — e.g. interview → interview_scheduled) */
+    const notificationTypeByStatus = {
+      pending: 'application_viewed',
+      reviewing: 'application_reviewing',
+      shortlisted: 'application_shortlisted',
+      interview: 'interview_scheduled',
+      rejected: 'application_rejected',
+      accepted: 'application_accepted',
+      withdrawn: 'application_viewed',
+    };
+    const notificationType = notificationTypeByStatus[status] || 'application_viewed';
+
     const title = status === 'shortlisted' ? 'Application Shortlisted' :
                   status === 'interview' ? 'Interview Scheduled' :
                   status === 'rejected' ? 'Application Update' :
@@ -185,12 +196,19 @@ exports.updateApplicationStatus = async (req, res, next) => {
     const jobId = application.isScraped 
       ? (application.scrapedJob?._id || application.scrapedJob)?.toString()
       : (application.job?._id || application.job)?.toString();
+
+    let notifyMessage = statusMessages[status] || `Your application status has been updated to ${status}`;
+    if (status === "interview" && application.metadata?.interview) {
+      const iv = application.metadata.interview;
+      const parts = [iv.date, iv.time, iv.location].filter(Boolean);
+      if (parts.length) notifyMessage += ` — ${parts.join(" · ")}`;
+    }
     
     await notificationService.createNotification({
       userId: application.applicant._id.toString(),
       type: notificationType,
       title,
-      message: statusMessages[status] || `Your application status has been updated to ${status}`,
+      message: notifyMessage,
       relatedJob: jobId,
       relatedApplication: application._id.toString(),
       metadata: application.metadata || {},

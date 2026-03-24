@@ -1,9 +1,12 @@
 require("dotenv").config();
 
+const http = require("http");
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
+const { Server } = require("socket.io");
+const { attachInterviewSocket } = require("./src/socket/interviewSocket");
 
 const app = express();
 
@@ -37,16 +40,23 @@ const startServer = async () => {
     console.log(`📊 Database: ${mongoose.connection.name}`);
     console.log(`🌐 Host: ${mongoose.connection.host}`);
     
-    // Start server only after MongoDB is connected
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    const io = new Server(server, {
+      cors: {
+        origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+        methods: ["GET", "POST"],
+        credentials: true,
+      },
+    });
+    attachInterviewSocket(io);
+
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
-      
-      // Initialize scheduler after server starts and DB is connected
-      const schedulerService = require('./src/services/schedulerService');
+      const schedulerService = require("./src/services/schedulerService");
       schedulerService.init();
       schedulerService.start();
-      console.log('📅 Scheduler initialized and started');
+      console.log("📅 Scheduler initialized and started");
     });
   } catch (err) {
     console.error("❌ MongoDB Connection Failed:", err.message);
@@ -55,7 +65,16 @@ const startServer = async () => {
     // If connection fails, still start server but warn about DB
     console.warn("⚠️ Starting server without database connection. Some features may not work.");
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    const io = new Server(server, {
+      cors: {
+        origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+        methods: ["GET", "POST"],
+        credentials: true,
+      },
+    });
+    attachInterviewSocket(io);
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT} (without DB)`);
     });
   }
@@ -119,6 +138,7 @@ app.use("/api/contributions", require("./src/routes/contributionRoutes"));
 app.use("/api/rewards", require("./src/routes/rewardRoutes"));
 app.use("/api/mentorship-requests", require("./src/routes/mentorshipRequestRoutes"));
 app.use("/api/investor", require("./src/routes/investorRoutes"));
+app.use("/api/interview-sessions", require("./src/routes/interviewSessionRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

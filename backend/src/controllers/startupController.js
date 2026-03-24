@@ -1,5 +1,6 @@
 const Startup = require("../models/Startup");
 const User = require("../models/User");
+const Job = require("../models/Job");
 
 const STARTUP_UPSERT_FIELDS = [
   "name",
@@ -144,9 +145,51 @@ exports.exploreStartups = async (req, res, next) => {
 
     const startups = await Startup.find(filter)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit, 10));
+      .limit(parseInt(limit, 10))
+      .lean();
 
-    res.json({ startups });
+    const ownerIds = startups.map((s) => s.owner);
+    const counts = await Job.aggregate([
+      {
+        $match: {
+          status: "active",
+          employer: { $in: ownerIds },
+        },
+      },
+      { $group: { _id: "$employer", count: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(counts.map((c) => [String(c._id), c.count]));
+
+    const enriched = startups.map((s) => ({
+      ...s,
+      openPositionsCount: countMap[String(s.owner)] || 0,
+    }));
+
+    res.json({ startups: enriched });
+  } catch (e) {
+    next(e);
+  }
+};
+
+/** Public: active jobs for a startup (by startup id — matches employer) */
+exports.getStartupJobs = async (req, res, next) => {
+  try {
+    const startup = await Startup.findById(req.params.id);
+    if (!startup) {
+      return res.status(404).json({ message: "Startup not found" });
+    }
+
+    const jobs = await Job.find({
+      status: "active",
+      $or: [{ startup: startup._id }, { employer: startup.owner }],
+    })
+      .sort({ createdAt: -1 })
+      .select(
+        "title description location company category salary skills jobType experience applicationsCount createdAt isRemote"
+      )
+      .lean();
+
+    res.json({ jobs, startup: { _id: startup._id, name: startup.name, owner: startup.owner } });
   } catch (e) {
     next(e);
   }

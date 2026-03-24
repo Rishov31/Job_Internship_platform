@@ -125,6 +125,12 @@ const jobSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    /** Linked startup profile when posted by a founder (employer) */
+    startup: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Startup",
+      index: true,
+    },
     companyDetails: {
       website: String,
       logo: String,

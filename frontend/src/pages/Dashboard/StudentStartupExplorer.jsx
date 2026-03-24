@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useOutletContext, useNavigate } from "react-router-dom";
+import { Link, useOutletContext, useNavigate } from "react-router-dom";
 
 function authHeader() {
   const token = localStorage.getItem("token");
@@ -29,6 +29,7 @@ export default function StudentStartupExplorer() {
             industry: s.industry || "Startup",
             stage: s.stage || "pre-seed",
             description: s.description,
+            openPositionsCount: s.openPositionsCount ?? 0,
             capitalLabel:
               s.capitalRaised && s.capitalRaised > 0
                 ? `₹${(s.capitalRaised / 1_00_00_000).toFixed(1)}Cr raised`
@@ -69,13 +70,18 @@ export default function StudentStartupExplorer() {
           {startups.map((s) => (
             <article
               key={s.id}
-              className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 backdrop-blur hover:border-sky-500/40 transition-colors"
+              className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 backdrop-blur hover:border-sky-500/40 transition-colors flex flex-col"
             >
               <h2 className="text-sm font-semibold text-slate-100">{s.name}</h2>
               <p className="text-[11px] text-slate-400 mt-0.5">
                 {s.industry} • {s.stage}
               </p>
               <p className="text-[11px] text-slate-500 mt-1">{s.capitalLabel}</p>
+              {s.openPositionsCount > 0 && (
+                <p className="text-[11px] text-sky-300 font-medium mt-1">
+                  {s.openPositionsCount} open position{s.openPositionsCount === 1 ? "" : "s"}
+                </p>
+              )}
               {s.description && (
                 <p className="mt-2 text-[11px] text-slate-400 line-clamp-3">
                   {s.description}
@@ -84,17 +90,25 @@ export default function StudentStartupExplorer() {
               {s.reward && (
                 <p className="mt-2 text-[11px] text-emerald-300">Reward: {s.reward}</p>
               )}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to={`/student/explore/${s.id}`}
+                  className="inline-flex text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-sky-600/30 text-sky-200 border border-sky-500/40 hover:bg-sky-600/40"
+                >
+                  Company profile & open roles →
+                </Link>
+              </div>
               {s.githubUrl ? (
                 <a
                   href={s.githubUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 inline-block text-[11px] text-sky-300 font-medium"
+                  className="mt-2 inline-block text-[11px] text-sky-300 font-medium"
                 >
                   View GitHub repo →
                 </a>
               ) : (
-                <p className="mt-3 text-[11px] text-slate-600">No repo linked</p>
+                <p className="mt-2 text-[11px] text-slate-600">No repo linked</p>
               )}
             </article>
           ))}

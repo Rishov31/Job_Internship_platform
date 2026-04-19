@@ -432,6 +432,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
       totalCommitsAndPRs: 0,
       reposScanned: 0,
       githubStartupCount: 0,
+      startupBreakdown: [],
       message: "No GitHub repositories registered by startups yet.",
     };
   }
@@ -546,6 +547,15 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
     (k) => !k.startsWith("_name_")
   ).length;
 
+  const startupBreakdown = Object.keys(byStartup)
+    .filter((k) => !k.startsWith("_name_"))
+    .map((sid) => ({
+      startupId: sid,
+      name: byStartup[`_name_${sid}`] || "Startup",
+      commits: byStartup[sid] || 0,
+    }))
+    .sort((a, b) => b.commits - a.commits);
+
   return {
     githubUsername,
     chart,
@@ -568,6 +578,7 @@ async function getStudentGithubActivity(githubUsername, options = {}) {
     totalCommitsAndPRs: total,
     reposScanned,
     githubStartupCount,
+    startupBreakdown,
     zeroActivityTip,
   };
 }

@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 // import NotificationBell from "../../components/NotificationBell";
+import ContributorLeaderboard from "../../components/ContributorLeaderboard";
 import { me, logoutUser } from "../../api/authApi";
 import { getJobStats, getEmployerJobs } from "../../api/jobApi";
 
@@ -385,9 +386,10 @@ export default function StartupDashboard() {
       window.prompt("Session length (minutes)", "30") || "30",
       10
     );
-    const pricePerMinute = parseFloat(
-      window.prompt("Price per minute (INR)", "100") || "0"
+    const pricePerHour = parseFloat(
+      window.prompt("Price per hour (INR)", "6000") || "0"
     );
+    const pricePerMinute = Math.max(pricePerHour / 60, 0);
     const token = localStorage.getItem("token");
     const res = await fetch(
       `${API_BASE}/mentorship-requests/${reqId}/propose-slot`,
@@ -458,6 +460,17 @@ export default function StartupDashboard() {
               📈
             </span>
             Overview
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/startup/community")}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/80 text-slate-200"
+          >
+            <span className="w-6 h-6 rounded-md bg-slate-800 flex items-center justify-center text-[11px]">
+              💬
+            </span>
+            Community chat
           </button>
 
           <button
@@ -702,6 +715,8 @@ export default function StartupDashboard() {
             </section>
           </div>
 
+          <ContributorLeaderboard apiBase={API_BASE} />
+
           {/* Middle row: Job & Internship posting + Open Source collaboration */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Job & Internship Posting */}
@@ -937,7 +952,7 @@ export default function StartupDashboard() {
                   Student mentorship requests
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Propose time, duration, and ₹/min. After the student pays (demo), chat and video unlock.
+                  Propose time, duration, and ₹/hour. After Stripe payment, chat and video unlock.
                 </p>
               </div>
               <Link

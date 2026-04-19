@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useOutletContext, useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useOutletContext, useNavigate, Link, useLocation } from "react-router-dom";
 
 function tokenHeaders() {
   const t = localStorage.getItem("token");
@@ -12,6 +12,8 @@ function tokenHeaders() {
 export default function StudentMentorship() {
   const { authUser } = useOutletContext();
   const navigate = useNavigate();
+  const location = useLocation();
+  const processedCheckoutRef = useRef(new Set());
   const [tab, setTab] = useState("hub");
   const [startups, setStartups] = useState([]);
   const [investors, setInvestors] = useState([]);
@@ -93,23 +95,60 @@ export default function StudentMentorship() {
   };
 
   const payRequest = async (id) => {
-    if (!window.confirm("Confirm booking with demo payment?")) return;
+    if (!window.confirm("Proceed to secure Stripe payment?")) return;
     const res = await fetch(`/api/mentorship-requests/${id}/pay`, {
       method: "POST",
       headers: tokenHeaders(),
       credentials: "include",
-      body: JSON.stringify({ paymentMethod: "demo" }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       window.alert(data.message || "Payment failed");
       return;
     }
-    window.alert(
-      `${data.message || "Booked!"} Use Mentor Chat and Video Call below.`
-    );
-    refreshRequests();
+    const sessionId = data?.session?._id;
+    if (!sessionId) {
+      window.alert("Session created but payment session is missing.");
+      return;
+    }
+    const checkoutRes = await fetch(`/api/payments/mentoring/${sessionId}/checkout`, {
+      method: "POST",
+      headers: tokenHeaders(),
+      credentials: "include",
+    });
+    const checkoutData = await checkoutRes.json().catch(() => ({}));
+    if (!checkoutRes.ok || !checkoutData.checkoutUrl) {
+      window.alert(checkoutData.message || "Could not start Stripe checkout.");
+      return;
+    }
+    window.location.href = checkoutData.checkoutUrl;
   };
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const paymentState = q.get("payment");
+    const sessionId = q.get("sessionId");
+    const checkoutSessionId = q.get("checkoutSessionId");
+    if (paymentState === "success" && sessionId && checkoutSessionId) {
+      if (processedCheckoutRef.current.has(checkoutSessionId)) return;
+      processedCheckoutRef.current.add(checkoutSessionId);
+      fetch(`/api/payments/mentoring/${sessionId}/confirm`, {
+        method: "POST",
+        headers: tokenHeaders(),
+        credentials: "include",
+        body: JSON.stringify({ checkoutSessionId }),
+      })
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          if (!ok) throw new Error(d?.message || "Payment confirmation failed");
+          window.alert("Payment successful! Session booked and invoice sent to your email.");
+          refreshRequests();
+        })
+        .catch((e) => window.alert(e.message || "Payment confirmation failed"));
+    } else if (paymentState === "cancelled") {
+      window.alert("Payment was cancelled. You can retry payment any time.");
+    }
+  }, [location.search]);
 
   const statusLabel = (s) => {
     if (s === "slot_proposed") return "Slot ready — pay to book";
@@ -193,7 +232,9 @@ export default function StudentMentorship() {
                       {r.proposedStartTime
                         ? new Date(r.proposedStartTime).toLocaleString()
                         : ""}{" "}
-                      · {r.proposedMinutes} min · ₹{r.pricePerMinute}/min · Total ₹
+                      · {r.proposedMinutes} min · ₹
+                      {Math.round((Number(r.pricePerMinute) || 0) * 60)}
+                      /hour · Total ₹
                       {r.totalAmount}
                     </p>
                     <button
@@ -201,7 +242,7 @@ export default function StudentMentorship() {
                       onClick={() => payRequest(r._id)}
                       className="mt-1 px-3 py-1 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-500"
                     >
-                      Pay & book (demo)
+                      Pay & book (Stripe)
                     </button>
                   </div>
                 )}

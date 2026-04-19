@@ -21,6 +21,12 @@ const jobSeekerProfileSchema = new mongoose.Schema(
     professionalInfo: {
       currentTitle: String,
       yearsOfExperience: { type: Number, default: 0 },
+      /** Shown on student dashboard (availability pill) */
+      availabilityStatus: {
+        type: String,
+        enum: ["available", "interviewing", "open", "not_looking"],
+        default: "available",
+      },
       jobType: [{ type: String, enum: ["full-time", "part-time", "contract", "internship", "freelance"] }],
       workLocation: { type: String, enum: ["on-site", "remote", "hybrid"], default: "on-site" },
       noticePeriod: String,
@@ -32,6 +38,13 @@ const jobSeekerProfileSchema = new mongoose.Schema(
       { company: String, position: String, startDate: Date, endDate: Date, location: String, description: String }
     ],
     skills: { technical: [String], soft: [String] },
+    /** Optional per-skill proficiency for dashboard (0–100) */
+    skillProficiency: [
+      {
+        name: { type: String, trim: true },
+        percent: { type: Number, min: 0, max: 100, default: 70 },
+      },
+    ],
     resume: { fileName: String, fileUrl: String, uploadedAt: Date },
     preferences: { jobCategories: [String], locations: [String], jobAlerts: { type: Boolean, default: true } },
     // Dashboard & contribution metrics

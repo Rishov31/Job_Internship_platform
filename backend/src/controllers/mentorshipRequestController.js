@@ -1,6 +1,5 @@
 const MentorshipRequest = require("../models/MentorshipRequest");
 const MentoringSession = require("../models/MentoringSession");
-const ChatRoom = require("../models/ChatRoom");
 const Startup = require("../models/Startup");
 const User = require("../models/User");
 
@@ -240,32 +239,28 @@ exports.payRequest = async (req, res, next) => {
     const startupRef =
       doc.startup && doc.startup._id ? doc.startup._id : doc.startup;
 
-    const session = await MentoringSession.create({
-      mentorUser: providerUserId,
-      jobseeker: doc.student,
-      startTime: doc.proposedStartTime,
-      minutes: doc.proposedMinutes,
-      pricePerMinuteAtBooking: doc.pricePerMinute,
-      totalAmount: doc.totalAmount,
-      status: "paid",
-      sessionKind,
-      providerStartup: sessionKind === "startup_founder" ? startupRef : undefined,
-      mentorshipRequest: doc._id,
-      paymentId: req.body?.paymentId || `demo_${Date.now()}`,
-      paymentMethod: req.body?.paymentMethod || "demo",
-      notes: doc.message?.slice(0, 500),
-      motivation: doc.message?.slice(0, 1000),
-    });
-
-    await ChatRoom.create({
-      mentoringSession: session._id,
-      mentor: providerUserId,
-      jobseeker: doc.student,
-    });
-
-    doc.status = "paid";
-    doc.mentoringSession = session._id;
-    await doc.save();
+    let session = null;
+    if (doc.mentoringSession) {
+      session = await MentoringSession.findById(doc.mentoringSession);
+    }
+    if (!session) {
+      session = await MentoringSession.create({
+        mentorUser: providerUserId,
+        jobseeker: doc.student,
+        startTime: doc.proposedStartTime,
+        minutes: doc.proposedMinutes,
+        pricePerMinuteAtBooking: doc.pricePerMinute,
+        totalAmount: doc.totalAmount,
+        status: "pending_payment",
+        sessionKind,
+        providerStartup: sessionKind === "startup_founder" ? startupRef : undefined,
+        mentorshipRequest: doc._id,
+        notes: doc.message?.slice(0, 500),
+        motivation: doc.message?.slice(0, 1000),
+      });
+      doc.mentoringSession = session._id;
+      await doc.save();
+    }
 
     const populatedSession = await MentoringSession.findById(session._id)
       .populate("mentorUser", "fullName email")
@@ -274,7 +269,7 @@ exports.payRequest = async (req, res, next) => {
       .lean();
 
     res.json({
-      message: "Booked. Open Chat and Video Call from your dashboard.",
+      message: "Session created. Complete Stripe payment to confirm booking.",
       session: populatedSession,
       request: doc,
     });

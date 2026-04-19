@@ -3,6 +3,7 @@ const Startup = require("../models/Startup");
 const Investment = require("../models/Investment");
 const InvestorProfile = require("../models/InvestorProfile");
 const User = require("../models/User");
+const emailService = require("../services/emailService");
 
 function calcInvestorCompletion(p) {
   if (!p) return 0;
@@ -73,6 +74,31 @@ function portfolioItemFromInvestment(inv, startup) {
     roiPercent: Math.round(roiPercent * 100) / 100,
     sharesPercent: shares,
   };
+}
+
+async function sendInvestmentConfirmationEmail({ investor, startup, investment }) {
+  if (!investor?.email) return;
+  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  const subject = `Investment Receipt - ${startup?.name || "Startup"}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: auto; color: #111827;">
+      <h2 style="margin-bottom: 4px;">Investment Confirmation</h2>
+      <p style="margin-top: 0; color: #6b7280;">Your investment has been successfully recorded.</p>
+      <div style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin: 16px 0;">
+        <p><strong>Investor:</strong> ${investor.fullName} (${investor.email})</p>
+        <p><strong>Startup:</strong> ${startup?.name || "N/A"}</p>
+        <p><strong>Amount Invested:</strong> ₹${Number(investment?.amount || 0).toLocaleString("en-IN")}</p>
+        <p><strong>Estimated Share:</strong> ${Number(investment?.sharePercent || 0).toFixed(4)}%</p>
+        <p><strong>Investment ID:</strong> ${investment?._id || "N/A"}</p>
+        <p><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+      </div>
+      <p style="color: #6b7280; font-size: 13px;">
+        Track portfolio in dashboard:
+        <a href="${frontendUrl}/investor/dashboard">${frontendUrl}/investor/dashboard</a>
+      </p>
+    </div>
+  `;
+  await emailService.sendEmail({ to: investor.email, subject, html });
 }
 
 // Overview for investor dashboard: discovery + portfolio stats
@@ -258,6 +284,19 @@ exports.confirmInvestment = async (req, res, next) => {
       return next(inner);
     } finally {
       if (session) session.endSession();
+    }
+
+    if (responsePayload?.investment && responsePayload?.startup) {
+      User.findById(req.user.id)
+        .select("fullName email")
+        .then((u) =>
+          sendInvestmentConfirmationEmail({
+            investor: u,
+            startup: responsePayload.startup,
+            investment: responsePayload.investment,
+          })
+        )
+        .catch(() => {});
     }
 
     return res.status(201).json(responsePayload);

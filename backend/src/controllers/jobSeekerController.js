@@ -38,7 +38,16 @@ exports.upsertProfile = async (req,res,next)=>{
 exports.sectionUpdate = async (req,res,next)=>{
   try{
     const { section } = req.params;
-    const allowed = new Set(["personalInfo","professionalInfo","education","experience","skills","resume","preferences"]);
+    const allowed = new Set([
+      "personalInfo",
+      "professionalInfo",
+      "education",
+      "experience",
+      "skills",
+      "skillProficiency",
+      "resume",
+      "preferences",
+    ]);
     if(!allowed.has(section)) return res.status(400).json({ message: "Invalid section" });
     const profile = await JobSeekerProfile.findOneAndUpdate(
       { user: req.user.id }, { [section]: req.body }, { new: true, upsert: true }

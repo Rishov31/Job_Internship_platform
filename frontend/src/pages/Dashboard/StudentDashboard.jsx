@@ -1,7 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate, useOutletContext, useLocation } from "react-router-dom";
 import ContributionGithubChart from "../../components/ContributionGithubChart";
 import StartupPointsLineChart from "../../components/StartupPointsLineChart";
+import ContributorLeaderboard from "../../components/ContributorLeaderboard";
+import StudentProfileCard from "../../components/student/StudentProfileCard";
+import { chatWithAiCoach } from "../../api/aiCoachApi";
 // import NotificationBell from "../../components/NotificationBell";
 
 // This dashboard is a higher-level student view.
@@ -56,6 +59,84 @@ function studentDisplayName(profile, authUser) {
   return "Student";
 }
 
+function mentorDisplayName(session) {
+  const u = session?.mentorUser;
+  if (u && typeof u === "object" && u.fullName) return u.fullName;
+  const nested = session?.mentor?.user;
+  if (nested && typeof nested === "object" && nested.fullName) return nested.fullName;
+  if (session?.sessionKind === "startup_founder" && session?.providerStartup?.name) {
+    return session.providerStartup.name;
+  }
+  return "Mentor";
+}
+
+function sessionCardTitle(session) {
+  const name = mentorDisplayName(session);
+  if (session?.sessionKind === "startup_founder") {
+    return `Mentoring Session with ${name}`;
+  }
+  if (session?.sessionKind === "investor") {
+    return `Mentoring Session with ${name}`;
+  }
+  return `Mentoring Session with ${name}`;
+}
+
+function formatSessionCardWhen(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  const wk = d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+  const mon = d.toLocaleDateString("en-US", { month: "short" }).toUpperCase();
+  const dayNum = d.getDate();
+  const time = d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+    .toLowerCase();
+  return `${wk}, ${mon} ${dayNum} @${time}`;
+}
+
+function getSessionCountdown(iso) {
+  const start = new Date(iso);
+  const now = new Date();
+  const ms = start.getTime() - now.getTime();
+  const dayMs = 86400000;
+  if (ms < 0) {
+    const daysPast = Math.ceil(-ms / dayMs);
+    return {
+      text: daysPast <= 0 ? "Today" : `-${daysPast} Day${daysPast === 1 ? "" : "s"} Left`,
+      overdue: true,
+    };
+  }
+  const days = Math.floor(ms / dayMs);
+  const hours = Math.floor((ms % dayMs) / 3600000);
+  if (days > 0) {
+    return {
+      text: `${days} Day${days === 1 ? "" : "s"} Left`,
+      overdue: days <= 1,
+    };
+  }
+  if (hours > 0) {
+    return { text: `${hours} Hour${hours === 1 ? "" : "s"} Left`, overdue: true };
+  }
+  const mins = Math.floor((ms % 3600000) / 60000);
+  return {
+    text: mins > 0 ? `${mins} min Left` : "Starting soon",
+    overdue: true,
+  };
+}
+
+function pickUpcomingMentoringSessions(sessions) {
+  const now = new Date();
+  return (sessions || [])
+    .filter((s) => {
+      if (!s?.startTime) return false;
+      const st = s.status;
+      if (st !== "paid" && st !== "scheduled") return false;
+      const t = new Date(s.startTime);
+      return !Number.isNaN(t.getTime()) && t >= now;
+    })
+    .sort((a, b) => new Date(a.startTime) - new Date(b.startTime))
+    .slice(0, 10);
+}
+
 export default function StudentDashboard() {
   const outlet = useOutletContext();
   const authUser = outlet?.authUser;
@@ -70,14 +151,47 @@ export default function StudentDashboard() {
   const [startupCards, setStartupCards] = useState([]);
   const [ghActivity, setGhActivity] = useState(null);
   const [ghLoading, setGhLoading] = useState(true);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiInput, setAiInput] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiMessages, setAiMessages] = useState([
+    {
+      role: "assistant",
+      content:
+        "Hi! I am your AI Career Coach. Ask me for role suggestions, performance feedback, or a focused improvement plan.",
+    },
+  ]);
   /** null until first load of /contributions/student/me */
   const [contributions, setContributions] = useState(null);
   const [appSummary, setAppSummary] = useState({ total: 0, interviews: 0 });
+  const [mentoringSessions, setMentoringSessions] = useState([]);
+  const [mentoringSessionsLoading, setMentoringSessionsLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  const processedMentoringCheckoutRef = useRef(new Set());
+
+  const refreshMentoringSessions = useCallback(() => {
+    const headers = { ...authHeader() };
+    return fetch("/api/mentoring-sessions/me", {
+      headers,
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        setMentoringSessions(Array.isArray(data?.sessions) ? data.sessions : []);
+      })
+      .catch(() => setMentoringSessions([]));
+  }, []);
 
   const startupPointsChartData = useMemo(
     () => buildMonthlyStartupPointsSeries(contributions || []),
     [contributions]
+  );
+
+  const upcomingMentoringSessions = useMemo(
+    () => pickUpcomingMentoringSessions(mentoringSessions),
+    [mentoringSessions]
   );
 
   useEffect(() => {
@@ -205,10 +319,51 @@ export default function StudentDashboard() {
         })
         .catch(() => {});
 
+      refreshMentoringSessions().finally(() => {
+        if (!cancelled) setMentoringSessionsLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
-  }, [authUser?.id, navigate]);
+  }, [authUser?.id, navigate, refreshMentoringSessions]);
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const paymentState = q.get("payment");
+    const sessionId = q.get("sessionId");
+    const checkoutSessionId = q.get("checkoutSessionId");
+    if (paymentState === "mentoring_success" && sessionId && checkoutSessionId) {
+      if (processedMentoringCheckoutRef.current.has(checkoutSessionId)) return;
+      processedMentoringCheckoutRef.current.add(checkoutSessionId);
+      const token = localStorage.getItem("token");
+      fetch(`/api/payments/mentoring/${sessionId}/confirm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: "include",
+        body: JSON.stringify({ checkoutSessionId }),
+      })
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then(({ ok, d }) => {
+          if (!ok) throw new Error(d?.message || "Payment confirmation failed");
+          return refreshMentoringSessions();
+        })
+        .then(() => {
+          window.alert("Payment successful! Your mentorship session is booked.");
+          navigate("/student/dashboard", { replace: true });
+        })
+        .catch((e) => {
+          window.alert(e.message || "Payment confirmation failed");
+          navigate("/student/dashboard", { replace: true });
+        });
+    } else if (paymentState === "mentoring_cancelled") {
+      window.alert("Payment was cancelled. You can retry from Mentorship.");
+      navigate("/student/dashboard", { replace: true });
+    }
+  }, [location.search, navigate, refreshMentoringSessions]);
 
   if (!authUser) return null;
 
@@ -216,6 +371,32 @@ export default function StudentDashboard() {
   const initial = (displayName || "S").trim().charAt(0).toUpperCase();
   const githubStartupCount = Number(ghActivity?.githubStartupCount || 0);
   const collabDisplay = Math.max(Number(collaborations || 0), githubStartupCount);
+
+  const handleAiSend = async () => {
+    const message = aiInput.trim();
+    if (!message || aiLoading) return;
+    setAiError("");
+    setAiInput("");
+
+    const nextMessages = [...aiMessages, { role: "user", content: message }];
+    setAiMessages(nextMessages);
+    setAiLoading(true);
+    try {
+      const history = nextMessages.slice(-8).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const data = await chatWithAiCoach({ message, history });
+      setAiMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply || "I could not generate a response." },
+      ]);
+    } catch (e) {
+      setAiError(e.message || "Unable to reach AI coach");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   const handleClaimReward = async () => {
     const token = localStorage.getItem("token");
@@ -256,161 +437,28 @@ export default function StudentDashboard() {
 
   return (
     <>
-          {/* Job applications (summary) */}
-          <section className="mb-6 rounded-2xl border border-slate-700/70 bg-slate-900/60 p-5 backdrop-blur flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-100">Applications</p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {appSummary.total} job application{appSummary.total === 1 ? "" : "s"}
-                {appSummary.interviews > 0 && (
-                  <span className="text-violet-300">
-                    {" "}
-                    · {appSummary.interviews} upcoming interview
-                    {appSummary.interviews === 1 ? "" : "s"}
-                  </span>
-                )}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate("/student/applications")}
-              className="text-xs font-semibold px-4 py-2 rounded-xl bg-sky-600/90 text-white hover:bg-sky-500 border border-sky-500/40"
-            >
-              View all applications
-            </button>
-          </section>
-
-          {/* Top row: profile + startup explorer summary */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            {/* Profile & skills panel (two-thirds) */}
-            <section className="lg:col-span-2 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-indigo-500 to-sky-500 flex items-center justify-center text-white text-lg font-semibold">
-                    {initial}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-50">
-                      {displayName}
-                    </p>
-                    <p className="text-xs text-slate-400">
-                      {profile?.professionalInfo?.currentTitle ||
-                        "Add your current role / program"}
-                    </p>
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      Contribution Score{" "}
-                      <span className="font-semibold text-indigo-600">
-                        {contributionScore}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-2">
-                  <button
-                    onClick={() => navigate("/jobseeker/profile")}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800/80 text-slate-100 hover:bg-slate-800"
-                  >
-                    {completion.isProfileComplete ? "Edit profile" : "Complete profile"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/student/mentorship")}
-                    className="text-[11px] font-medium text-sky-300 hover:text-sky-200"
-                  >
-                    Mentorship (founders & investors) →
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/student/resources")}
-                    className="text-[11px] font-medium text-emerald-300 hover:text-emerald-200"
-                  >
-                    Career guidance resources →
-                  </button>
-                </div>
-              </div>
-
-              {/* Skills row */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3">
-                  <p className="text-xs font-semibold text-slate-200 mb-1">
-                    Technical Skills
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(profile?.skills?.technical || []).length ? (
-                      profile.skills.technical.map((skill, idx) => (
-                        <span
-                          key={`${skill}-${idx}`}
-                          className="px-2 py-1 rounded-full bg-indigo-500/20 text-[11px] text-indigo-200"
-                        >
-                          {skill}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-[11px] text-slate-500">
-                        Add technical skills in your profile
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-xl bg-slate-800/80 border border-slate-700 p-3">
-                  <p className="text-xs font-semibold text-slate-200 mb-1">
-                    Soft Skills
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(profile?.skills?.soft || []).length ? (
-                      profile.skills.soft.map((skill, idx) => (
-                        <span
-                          key={`${skill}-${idx}`}
-                          className="px-2 py-1 rounded-full bg-amber-500/20 text-[11px] text-amber-100"
-                        >
-                          {skill}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-[11px] text-slate-500">
-                        Add soft skills in your profile
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Profile completion bar */}
-              <div className="mt-4 flex items-center gap-4">
-                <div className="flex-1">
-                  <div className="flex justify-between text-[11px] text-slate-400 mb-1">
-                    <span>Profile completion</span>
-                    <span>{completion.completionPercentage || 0}%</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div
-                      className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-sky-400"
-                      style={{
-                        width: `${completion.completionPercentage || 0}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                {!completion.isProfileComplete && (
-                  <button
-                    onClick={() => navigate("/jobseeker/profile")}
-                    className="text-[11px] font-medium px-3 py-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600"
-                  >
-                    Complete profile
-                  </button>
-                )}
-              </div>
+          {/* Top: compact profile + contribution tracker */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-4">
+            <section className="lg:col-span-5 min-h-0">
+              <StudentProfileCard
+                profile={profile}
+                displayName={displayName}
+                initial={initial}
+                completion={completion}
+                contributionScore={contributionScore}
+                approvedContributions={approvedContributions}
+                contributions={Array.isArray(contributions) ? contributions : []}
+                ghActivity={ghActivity}
+              />
             </section>
 
-            {/* Contribution summary / analytics (right) */}
-            <section className="bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
-              <div className="flex items-center justify-between mb-2 gap-2">
+            <section className="lg:col-span-7 bg-slate-900/70 rounded-2xl shadow-lg border border-slate-700/70 p-4 backdrop-blur">
+              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                 <p className="text-xs font-semibold text-slate-100">
                   Contribution Tracker
                 </p>
                 <div className="text-right">
-                  <span className="text-[11px] text-emerald-400 font-medium block">
+                  <span className="text-[11px] text-emerald-400 font-medium">
                     {contributionScore > 0 ? `+${contributionScore} pts` : "0 pts"}{" "}
                     <span className="text-slate-500 font-normal">platform</span>
                   </span>
@@ -421,10 +469,8 @@ export default function StudentDashboard() {
                   )}
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mb-2">
-                Live GitHub activity across startup repos (all linked branches, not
-                only <code className="text-sky-400">main</code>) — commits + merged
-                PRs.
+              <p className="text-[10px] text-slate-500 mb-2 leading-snug">
+                Commits + merged PRs on linked startup repos (all branches).
               </p>
               {ghActivity?.needsGithubUsername && (
                 <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
@@ -488,22 +534,22 @@ export default function StudentDashboard() {
                   {ghActivity.zeroActivityTip}
                 </p>
               )}
-              <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
+              <div className="mt-3 grid grid-cols-3 gap-2 text-[10px]">
                 <div className="rounded-lg bg-slate-800/80 p-2">
-                  <p className="text-slate-400">Startups</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-100">
+                  <p className="text-slate-500">Startups</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-100 tabular-nums">
                     {collabDisplay}
                   </p>
                 </div>
                 <div className="rounded-lg bg-slate-800/80 p-2">
-                  <p className="text-slate-400">Approved</p>
-                  <p className="mt-1 text-sm font-semibold text-emerald-400">
+                  <p className="text-slate-500">Approved</p>
+                  <p className="mt-0.5 text-sm font-semibold text-emerald-400 tabular-nums">
                     {approvedContributions}
                   </p>
                 </div>
                 <div className="rounded-lg bg-slate-800/80 p-2">
-                  <p className="text-slate-400">Collab level</p>
-                  <p className="mt-1 text-sm font-semibold text-indigo-300">
+                  <p className="text-slate-500">Collab</p>
+                  <p className="mt-0.5 text-sm font-semibold text-indigo-300">
                     {profile?.collaborationLevel || "Bronze"}
                   </p>
                 </div>
@@ -511,7 +557,153 @@ export default function StudentDashboard() {
             </section>
           </div>
 
-          {/* Middle row: Startup explorer + Job/Internship card + Rewards */}
+          <ContributorLeaderboard currentUserId={authUser?.id} compact />
+
+          <section className="mb-4 rounded-xl border border-slate-700/70 bg-slate-900/50 px-4 py-3 backdrop-blur flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-slate-200">Applications</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                {appSummary.total} job application{appSummary.total === 1 ? "" : "s"}
+                {appSummary.interviews > 0 && (
+                  <span className="text-violet-300">
+                    {" "}
+                    · {appSummary.interviews} upcoming interview
+                    {appSummary.interviews === 1 ? "" : "s"}
+                  </span>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate("/student/applications")}
+              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-sky-600/90 text-white hover:bg-sky-500 border border-sky-500/30 shrink-0"
+            >
+              View all
+            </button>
+          </section>
+
+          {/* Ongoing mentorship sessions — dark theme to match dashboard */}
+          <section className="mb-6 rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 sm:p-5 backdrop-blur shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <h3 className="text-sm font-semibold text-slate-100 tracking-tight">
+                Ongoing Info Sessions
+              </h3>
+              <button
+                type="button"
+                onClick={() => navigate("/student/mentorship")}
+                className="text-xs font-semibold text-sky-400 hover:text-sky-300"
+              >
+                Mentorship hub →
+              </button>
+            </div>
+
+            {mentoringSessionsLoading ? (
+              <p className="text-sm text-slate-500 py-6 text-center">Loading sessions…</p>
+            ) : upcomingMentoringSessions.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/40 px-4 py-8 text-center">
+                <p className="text-sm text-slate-300 font-medium">No upcoming sessions</p>
+                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                  When you book and pay for a mentorship slot, it will show here with date and time.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/student/mentorship")}
+                  className="mt-4 text-xs font-semibold px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500 border border-sky-500/40"
+                >
+                  Book a session
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-4 overflow-x-auto pb-2 pt-1 -mx-1 px-1 scrollbar-thin [scrollbar-color:rgba(100,116,139,0.5)_transparent]">
+                {upcomingMentoringSessions.map((session) => {
+                  const cd = getSessionCountdown(session.startTime);
+                  const when = formatSessionCardWhen(session.startTime);
+                  const title = sessionCardTitle(session);
+                  return (
+                    <article
+                      key={session._id}
+                      className="min-w-[248px] max-w-[260px] shrink-0 rounded-xl border border-slate-700/90 bg-slate-950/50 p-4 shadow-inner flex flex-col"
+                    >
+                      <div className="flex items-center gap-2 text-sm font-medium text-rose-400">
+                        <svg
+                          className="w-4 h-4 shrink-0 text-rose-400/90"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                          aria-hidden
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                          />
+                        </svg>
+                        <span>{cd.text}</span>
+                      </div>
+                      <p className="mt-3 text-sm font-bold text-slate-50 leading-snug">{when}</p>
+                      <p className="mt-2 text-sm text-slate-400 leading-snug line-clamp-2">
+                        {title}
+                      </p>
+                      <p className="mt-1.5 text-xs text-slate-500">Online Session</p>
+                      <button
+                        type="button"
+                        onClick={() => navigate("/jobseeker/mentor-chats")}
+                        className="mt-4 w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold border border-sky-500/40 shadow-lg shadow-sky-900/20 transition-colors"
+                      >
+                        Attend
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+            <button
+              type="button"
+              onClick={() => navigate("/student/mentorship")}
+              className="group text-left rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 hover:border-sky-500/45 hover:bg-slate-900/90 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/30 to-sky-500/20 text-lg border border-slate-600/50">
+                  🎓
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-100">Mentorship hub</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Request founders & investors, pay, chat, and join video calls.
+                  </p>
+                </div>
+              </div>
+              <span className="mt-3 inline-flex text-[11px] font-medium text-sky-400 group-hover:text-sky-300">
+                Open full mentorship →
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/student/resources")}
+              className="group text-left rounded-xl border border-slate-700/80 bg-slate-900/60 p-4 hover:border-emerald-500/45 hover:bg-slate-900/90 transition-colors"
+            >
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/25 to-cyan-500/15 text-lg border border-slate-600/50">
+                  📚
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-100">Career Resources</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                    Guides, templates, and paths for interviews and skill growth.
+                  </p>
+                </div>
+              </div>
+              <span className="mt-3 inline-flex text-[11px] font-medium text-emerald-400 group-hover:text-emerald-300">
+                Browse resources →
+              </span>
+            </button>
+          </div>
+
+          {/* Startup explorer + Rewards */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
             {/* Startup Explorer (2 cols) */}
             <section className="xl:col-span-2 bg-slate-900/70 rounded-2xl shadow-xl border border-slate-700/70 p-5 backdrop-blur">
@@ -663,6 +855,74 @@ export default function StudentDashboard() {
               </button>
             </section>
           </div>
+      <button
+        type="button"
+        onClick={() => setAiOpen((v) => !v)}
+        className="fixed bottom-6 right-6 z-40 px-4 py-2 rounded-full bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-lg border border-violet-400/30"
+      >
+        {aiOpen ? "Close AI Coach" : "AI Career Coach"}
+      </button>
+
+      {aiOpen && (
+        <section className="fixed bottom-20 right-6 z-40 w-[min(28rem,92vw)] h-[32rem] rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/90">
+            <p className="text-sm font-semibold text-slate-100">AI Career Coach</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Personalized advice using your profile, applications, and contribution metrics.
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {aiMessages.map((m, idx) => (
+              <div
+                key={`${m.role}-${idx}`}
+                className={`rounded-xl px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed ${
+                  m.role === "assistant"
+                    ? "bg-slate-800/90 border border-slate-700 text-slate-100"
+                    : "bg-indigo-600/20 border border-indigo-500/30 text-indigo-100 ml-8"
+                }`}
+              >
+                {m.content}
+              </div>
+            ))}
+            {aiLoading && (
+              <div className="rounded-xl px-3 py-2 text-xs bg-slate-800/90 border border-slate-700 text-slate-300">
+                Thinking...
+              </div>
+            )}
+          </div>
+
+          {aiError && (
+            <p className="px-3 py-2 text-[11px] text-red-300 border-t border-red-500/20 bg-red-500/10">
+              {aiError}
+            </p>
+          )}
+
+          <div className="p-3 border-t border-slate-800 bg-slate-950 flex gap-2">
+            <textarea
+              value={aiInput}
+              onChange={(e) => setAiInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleAiSend();
+                }
+              }}
+              placeholder="Ask for career suggestions or performance feedback..."
+              rows={2}
+              className="flex-1 resize-none text-xs bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+            <button
+              type="button"
+              onClick={handleAiSend}
+              disabled={aiLoading || !aiInput.trim()}
+              className="self-end px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-60 text-white text-xs font-semibold"
+            >
+              Send
+            </button>
+          </div>
+        </section>
+      )}
     </>
   );
 }

@@ -1,23 +1,25 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { listMentors, createMentoringSession, updatePaymentStatus, getMyMentoringSessions, getMyChatRooms } from "../../api/mentorApi";
+import React, { useEffect, useRef, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import {
+  listMentors,
+  createMentoringSession,
+  createMentoringStripeCheckout,
+  confirmMentoringStripePayment,
+  getMyMentoringSessions,
+  getMyChatRooms,
+} from "../../api/mentorApi";
 import NotificationBell from "../../components/NotificationBell";
 
 export default function MentorshipList() {
+  const location = useLocation();
+  const processedCheckoutRef = useRef(new Set());
   const [mentors, setMentors] = useState([]);
   const [pagination, setPagination] = useState({});
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [selectedMentorId, setSelectedMentorId] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
-  const [payment, setPayment] = useState({
-    fullName: "",
-    aadharNumber: "",
-    cardNumber: "",
-    expiryMonth: "",
-    expiryYear: "",
-    cvv: "",
-  });
   const [motivation, setMotivation] = useState("");
   const [upcomingSessions, setUpcomingSessions] = useState([]);
   const [chatRooms, setChatRooms] = useState([]);
@@ -57,6 +59,30 @@ export default function MentorshipList() {
       setChatRooms((data.chatRooms || []).slice(0, 4));
     }).catch(()=> setChatRooms([]));
   }, []);
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const paymentState = q.get("payment");
+    const sessionId = q.get("sessionId");
+    const checkoutSessionId = q.get("checkoutSessionId");
+    if (paymentState === "success") {
+      if (!sessionId || !checkoutSessionId) {
+        window.alert("Payment returned successfully. Please refresh your sessions.");
+        return;
+      }
+      if (processedCheckoutRef.current.has(checkoutSessionId)) return;
+      processedCheckoutRef.current.add(checkoutSessionId);
+      confirmMentoringStripePayment(sessionId, checkoutSessionId)
+        .then(() => {
+          window.alert("Payment successful! Session booked and invoice sent to your email.");
+        })
+        .catch((e) => {
+          window.alert(e.message || "Payment confirmation failed. Please contact support.");
+        });
+    } else if (paymentState === "cancelled") {
+      window.alert("Payment was cancelled. You can retry anytime.");
+    }
+  }, [location.search]);
 
   const dayOfWeekToIndex = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
   const computeNextDateForDay = (dayKey) => {
@@ -124,31 +150,25 @@ export default function MentorshipList() {
 
   const closePayment = () => {
     setShowPayment(false);
+    setCheckoutLoading(false);
     setSelectedMentorId(null);
     setSelectedSession(null);
-    setPayment({ fullName: "", aadharNumber: "", cardNumber: "", expiryMonth: "", expiryYear: "", cvv: "" });
     setMotivation("");
   };
 
   const submitPaymentAndBook = async () => {
     if (!selectedSession) return;
-    if (!payment.fullName || !payment.aadharNumber || !payment.cardNumber || !payment.expiryYear) {
-      alert("Please fill payment details");
-      return;
-    }
     try {
-      // Update payment status to "paid"
-      await updatePaymentStatus(selectedSession._id, {
-        paymentId: `mock_${Date.now()}`,
-        paymentMethod: "mock",
-        status: "paid"
-      });
-      closePayment();
-      alert("Payment successful! Chat room has been created. You can now chat with your mentor.");
-      // Optionally redirect to chat page
-      window.location.href = "/jobseeker/mentor-chats";
+      setCheckoutLoading(true);
+      const data = await createMentoringStripeCheckout(selectedSession._id);
+      if (!data?.checkoutUrl) {
+        throw new Error("Stripe checkout URL not found.");
+      }
+      window.location.href = data.checkoutUrl;
     } catch (e) {
       alert(e.message || "Failed to process payment");
+    } finally {
+      setCheckoutLoading(false);
     }
   };
 
@@ -321,7 +341,9 @@ export default function MentorshipList() {
                             <div className="text-lg font-semibold text-gray-900">{m?.user?.fullName}</div>
                             <div className="text-sm text-gray-600">{m.title}</div>
                           </div>
-                          <div className="text-sm font-semibold text-blue-600">₹{m.pricePerMinute}/min</div>
+                          <div className="text-sm font-semibold text-blue-600">
+                            ₹{Math.round((Number(m.pricePerMinute) || 0) * 60)}/hour
+                          </div>
                         </div>
                         <div className="mt-2 text-sm text-gray-700 line-clamp-3">{m.bio}</div>
                         <div className="mt-2 flex gap-2 flex-wrap">
@@ -416,7 +438,7 @@ export default function MentorshipList() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-md rounded shadow-lg p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Complete Payment</h2>
+              <h2 className="text-lg font-semibold">Complete Secure Payment</h2>
               <button onClick={closePayment} className="text-gray-500 hover:text-gray-700">✕</button>
             </div>
             <div className="mb-4 p-3 bg-blue-50 rounded">
@@ -424,33 +446,17 @@ export default function MentorshipList() {
               <div className="text-lg font-semibold text-blue-600">₹{selectedSession.totalAmount}</div>
             </div>
             <div className="space-y-3">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Full Name</label>
-                <input value={payment.fullName} onChange={(e)=>setPayment(p=>({...p, fullName: e.target.value}))} className="w-full border rounded px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Aadhar Number</label>
-                <input value={payment.aadharNumber} onChange={(e)=>setPayment(p=>({...p, aadharNumber: e.target.value}))} className="w-full border rounded px-3 py-2" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Card Number</label>
-                <input value={payment.cardNumber} onChange={(e)=>setPayment(p=>({...p, cardNumber: e.target.value}))} className="w-full border rounded px-3 py-2" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">Exp Month</label>
-                  <input value={payment.expiryMonth} onChange={(e)=>setPayment(p=>({...p, expiryMonth: e.target.value}))} className="w-full border rounded px-3 py-2" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">Exp Year</label>
-                  <input value={payment.expiryYear} onChange={(e)=>setPayment(p=>({...p, expiryYear: e.target.value}))} className="w-full border rounded px-3 py-2" />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-1">CVV</label>
-                  <input value={payment.cvv} onChange={(e)=>setPayment(p=>({...p, cvv: e.target.value}))} className="w-full border rounded px-3 py-2" />
-                </div>
-              </div>
-              <button onClick={submitPaymentAndBook} className="w-full bg-blue-600 text-white rounded px-4 py-2">Pay & Book</button>
+              <p className="text-sm text-gray-600">
+                You will be redirected to Stripe Checkout to complete card payment securely.
+                After successful payment, your session is confirmed and invoice is emailed to you.
+              </p>
+              <button
+                onClick={submitPaymentAndBook}
+                disabled={checkoutLoading}
+                className="w-full bg-blue-600 text-white rounded px-4 py-2 disabled:opacity-60"
+              >
+                {checkoutLoading ? "Redirecting..." : "Pay with Stripe"}
+              </button>
             </div>
           </div>
         </div>

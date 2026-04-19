@@ -6,6 +6,7 @@ const emptyForm = () => ({
   personalInfo: { address: {} },
   professionalInfo: {},
   skills: { technical: [], soft: [] },
+  skillProficiency: [],
   education: [],
   experience: [],
   resume: {},
@@ -668,6 +669,22 @@ export default function JobSeekerProfile() {
                   }
                 />
               </div>
+              <div>
+                <label className={lbl}>Availability (shown on dashboard)</label>
+                <select
+                  className={inp}
+                  disabled={!editing}
+                  value={form?.professionalInfo?.availabilityStatus || "available"}
+                  onChange={(e) =>
+                    update("professionalInfo", "availabilityStatus", e.target.value)
+                  }
+                >
+                  <option value="available">Available</option>
+                  <option value="open">Open to opportunities</option>
+                  <option value="interviewing">Interviewing</option>
+                  <option value="not_looking">Not looking</option>
+                </select>
+              </div>
               <div className="md:col-span-2">
                 <label className={lbl}>Job types (hold Ctrl/Cmd to select)</label>
                 <select
@@ -787,6 +804,108 @@ export default function JobSeekerProfile() {
                       }
                     }}
                   />
+                )}
+              </div>
+
+              <div className="rounded-xl border border-slate-700/80 bg-slate-900/40 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className={lbl + " mb-0"}>Skill proficiency (0–100%)</label>
+                  {editing && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => ({
+                            ...prev,
+                            skillProficiency: [
+                              ...(prev.skillProficiency || []),
+                              { name: "", percent: 75 },
+                            ],
+                          }));
+                        }}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-600 text-sky-300 hover:bg-slate-700"
+                      >
+                        + Add row
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm((prev) => {
+                            const tech = prev.skills?.technical || [];
+                            const rows = tech.map((name, i) => ({
+                              name,
+                              percent: [88, 82, 76, 70, 65, 60][i] ?? 65,
+                            }));
+                            return { ...prev, skillProficiency: rows };
+                          });
+                        }}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/30"
+                      >
+                        Fill from technical skills
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  These bars power your student dashboard. Leave empty to use estimated bars from your technical
+                  skills list.
+                </p>
+                {(form.skillProficiency || []).length === 0 && !editing ? (
+                  <p className="text-[11px] text-slate-500">No proficiency rows yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {(form.skillProficiency || []).map((row, i) => (
+                      <li key={i} className="flex flex-wrap items-center gap-2">
+                        <input
+                          className={`${inp} flex-1 min-w-[120px]`}
+                          disabled={!editing}
+                          placeholder="Skill name"
+                          value={row.name || ""}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              skillProficiency: (prev.skillProficiency || []).map((r, j) =>
+                                j === i ? { ...r, name: e.target.value } : r
+                              ),
+                            }))
+                          }
+                        />
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          disabled={!editing}
+                          value={Number(row.percent) || 0}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              skillProficiency: (prev.skillProficiency || []).map((r, j) =>
+                                j === i ? { ...r, percent: Number(e.target.value) } : r
+                              ),
+                            }))
+                          }
+                          className="w-28 accent-indigo-500"
+                        />
+                        <span className="text-[11px] text-slate-400 w-8 tabular-nums">
+                          {Number(row.percent) || 0}%
+                        </span>
+                        {editing && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                skillProficiency: (prev.skillProficiency || []).filter((_, j) => j !== i),
+                              }))
+                            }
+                            className="text-xs text-rose-400 hover:text-rose-300 px-1"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>

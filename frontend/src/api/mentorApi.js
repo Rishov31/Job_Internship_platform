@@ -90,6 +90,33 @@ export async function updatePaymentStatus(sessionId, paymentData) {
   return data;
 }
 
+export async function createMentoringStripeCheckout(sessionId) {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/payments/mentoring/${sessionId}/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || "Failed to start Stripe checkout");
+  }
+  return data;
+}
+
+export async function confirmMentoringStripePayment(sessionId, checkoutSessionId) {
+  const token = localStorage.getItem("token");
+  const res = await fetch(`/api/payments/mentoring/${sessionId}/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ checkoutSessionId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.message || "Failed to confirm payment");
+  }
+  return data;
+}
+
 export async function getMyMentoringSessions() {
   const token = localStorage.getItem("token");
   const res = await fetch(`/api/mentoring-sessions/me`, {

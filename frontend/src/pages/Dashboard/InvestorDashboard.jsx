@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LineChart,
   Line,
@@ -15,6 +15,7 @@ import { me, logoutUser } from "../../api/authApi";
 const API_BASE = import.meta?.env?.VITE_API_URL || "/api";
 
 export default function InvestorDashboard() {
+  const location = useLocation();
   const [authUser, setAuthUser] = useState(null);
   const [investorProfile, setInvestorProfile] = useState(null);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -25,8 +26,11 @@ export default function InvestorDashboard() {
   const [portfolioItems, setPortfolioItems] = useState([]);
   const [selectedStartupId, setSelectedStartupId] = useState("");
   const [investAmount, setInvestAmount] = useState("20000");
+  const [rechargeAmount, setRechargeAmount] = useState("50000");
   const [investLoading, setInvestLoading] = useState(false);
+  const [rechargeLoading, setRechargeLoading] = useState(false);
   const [investError, setInvestError] = useState("");
+  const [rechargeError, setRechargeError] = useState("");
   const [mentorshipRequests, setMentorshipRequests] = useState([]);
   const [profileForm, setProfileForm] = useState({
     firmName: "",
@@ -40,6 +44,7 @@ export default function InvestorDashboard() {
   const portfolioRef = useRef(null);
   const transactionsRef = useRef(null);
   const analyticsRef = useRef(null);
+  const processedCheckoutRef = useRef(new Set());
 
   const scrollToSection = (ref, id) => {
     setNavSection(id);
@@ -181,6 +186,49 @@ export default function InvestorDashboard() {
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const balance = Number(walletBalance) || 0;
+      const shortfall = Math.max(0, Math.ceil(investAmtNum - balance));
+
+      if (shortfall > 0) {
+        try {
+          sessionStorage.setItem(
+            "pendingInvest",
+            JSON.stringify({
+              startupId: selectedStartupId,
+              amount: investAmtNum,
+              idempotencyKey,
+            })
+          );
+        } catch {
+          // ignore
+        }
+        const res = await fetch(`${API_BASE}/payments/investor/wallet/checkout`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+          body: JSON.stringify({ amount: shortfall }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data?.checkoutUrl) {
+          setInvestError(
+            data.message ||
+              "Unable to open Stripe checkout. Check that Stripe is configured, or recharge your wallet below."
+          );
+          try {
+            sessionStorage.removeItem("pendingInvest");
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/investor/invest`, {
         method: "POST",
         headers: {
@@ -207,6 +255,38 @@ export default function InvestorDashboard() {
       setInvestError("Network error. Please try again.");
     } finally {
       setInvestLoading(false);
+    }
+  };
+
+  const handleWalletRecharge = async () => {
+    const token = localStorage.getItem("token");
+    const amountNum = Number(String(rechargeAmount).replace(/,/g, ""));
+    if (!token || !Number.isFinite(amountNum) || amountNum <= 0) {
+      setRechargeError("Enter a valid recharge amount.");
+      return;
+    }
+    setRechargeError("");
+    setRechargeLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/payments/investor/wallet/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify({ amount: amountNum }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.checkoutUrl) {
+        setRechargeError(data.message || "Unable to start Stripe checkout");
+        return;
+      }
+      window.location.href = data.checkoutUrl;
+    } catch {
+      setRechargeError("Network error. Please try again.");
+    } finally {
+      setRechargeLoading(false);
     }
   };
 
@@ -284,9 +364,10 @@ export default function InvestorDashboard() {
       window.prompt("Session length (minutes)", "30") || "30",
       10
     );
-    const pricePerMinute = parseFloat(
-      window.prompt("Price per minute (INR)", "150") || "0"
+    const pricePerHour = parseFloat(
+      window.prompt("Price per hour (INR)", "9000") || "0"
     );
+    const pricePerMinute = Math.max(pricePerHour / 60, 0);
     const token = localStorage.getItem("token");
     const res = await fetch(
       `${API_BASE}/mentorship-requests/${reqId}/propose-slot`,
@@ -328,6 +409,95 @@ export default function InvestorDashboard() {
     }
     refreshInvestorMentorship();
   };
+
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const paymentState = q.get("payment");
+    const checkoutSessionId = q.get("checkoutSessionId");
+    if (paymentState === "wallet_success" && checkoutSessionId) {
+      if (processedCheckoutRef.current.has(checkoutSessionId)) return;
+      processedCheckoutRef.current.add(checkoutSessionId);
+      const token = localStorage.getItem("token");
+      (async () => {
+        try {
+          const res = await fetch(`${API_BASE}/payments/investor/wallet/confirm`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            credentials: "include",
+            body: JSON.stringify({ checkoutSessionId }),
+          });
+          const d = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(d?.message || "Wallet confirmation failed");
+          if (typeof d.walletBalance === "number") setWalletBalance(d.walletBalance);
+          await loadOverview();
+
+          let pending = null;
+          try {
+            pending = JSON.parse(sessionStorage.getItem("pendingInvest") || "null");
+          } catch {
+            pending = null;
+          }
+
+          if (
+            pending?.startupId &&
+            pending?.idempotencyKey &&
+            pending?.amount != null &&
+            Number(pending.amount) > 0
+          ) {
+            sessionStorage.removeItem("pendingInvest");
+            const invRes = await fetch(`${API_BASE}/investor/invest`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              credentials: "include",
+              body: JSON.stringify({
+                startupId: pending.startupId,
+                amount: Number(pending.amount),
+                idempotencyKey: pending.idempotencyKey,
+              }),
+            });
+            const invData = await invRes.json().catch(() => ({}));
+            if (!invRes.ok) {
+              window.alert(
+                invData.message ||
+                  "Wallet was updated but the investment did not complete. Click Confirm Investment again."
+              );
+              navigate("/investor/dashboard", { replace: true });
+              return;
+            }
+            await loadOverview();
+            if (typeof invData.walletBalance === "number") {
+              setWalletBalance(invData.walletBalance);
+            }
+            window.alert(
+              "Stripe payment received and your investment is confirmed. Check your email for details."
+            );
+            navigate("/investor/dashboard", { replace: true });
+            return;
+          }
+
+          window.alert("Wallet recharge successful. Invoice sent to your email.");
+          navigate("/investor/dashboard", { replace: true });
+        } catch (e) {
+          window.alert(e.message || "Wallet confirmation failed");
+          navigate("/investor/dashboard", { replace: true });
+        }
+      })();
+    } else if (paymentState === "wallet_cancelled") {
+      try {
+        sessionStorage.removeItem("pendingInvest");
+      } catch {
+        // ignore
+      }
+      window.alert("Payment cancelled. No charge was made.");
+      navigate("/investor/dashboard", { replace: true });
+    }
+  }, [location.search, loadOverview, navigate]);
 
   return (
     <div className="min-h-screen flex bg-[#050818] text-slate-100">
@@ -700,6 +870,41 @@ export default function InvestorDashboard() {
                 >
                   {investLoading ? "Processing…" : "Confirm Investment"}
                 </button>
+
+                <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
+                  <p className="text-[11px] text-slate-400">
+                    If your wallet is below the ticket amount, Confirm Investment opens Stripe for
+                    the missing balance, then completes the investment when you return.
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Or top up your wallet anytime below.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center rounded-lg border border-slate-700 px-2 py-1.5 bg-slate-900/80 flex-1">
+                      <span className="text-xs text-slate-400 mr-1">₹</span>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={rechargeAmount}
+                        onChange={(e) => setRechargeAmount(e.target.value)}
+                        className="flex-1 bg-transparent outline-none text-xs text-slate-100"
+                        placeholder="50000"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleWalletRecharge}
+                      disabled={rechargeLoading}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-500 disabled:opacity-60"
+                    >
+                      {rechargeLoading ? "Opening..." : "Add Funds"}
+                    </button>
+                  </div>
+                  {rechargeError ? (
+                    <p className="text-[11px] text-rose-400">{rechargeError}</p>
+                  ) : null}
+                </div>
               </div>
             </section>
           </div>

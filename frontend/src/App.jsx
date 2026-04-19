@@ -33,6 +33,7 @@ import JobSeekerApplyJob from "./pages/Jobs/JobSeekerApplyJob";
 import EmployerJobApplications from "./pages/Jobs/EmployerJobApplications";
 import StudentStartupDetail from "./pages/Dashboard/StudentStartupDetail";
 import CodingInterviewRoom from "./pages/Interview/CodingInterviewRoom";
+import CommunityHub from "./pages/Community/CommunityHub";
 
 // Internship components
 import InternshipList from "./pages/Internships/InternshipList";
@@ -80,6 +81,7 @@ export default function App() {
         <Route path="analytics" element={<StudentAnalytics />} />
         <Route path="resources" element={<StudentResources />} />
         <Route path="resources/:id" element={<ResourceDetails />} />
+        <Route path="community" element={<CommunityHub />} />
       </Route>
 
       {/* Jobseeker Routes (job & internship sub‑module) */}
@@ -96,6 +98,7 @@ export default function App() {
 
       {/* Startup Ecosystem Dashboard (new) */}
       <Route path="/startup/dashboard" element={<StartupDashboard />} />
+      <Route path="/startup/community" element={<CommunityHub />} />
       <Route path="/startup/profile" element={<StartupProfile />} />
       <Route path="/admin/resources" element={<ResourceManagement />} />
 

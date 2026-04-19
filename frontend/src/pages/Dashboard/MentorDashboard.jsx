@@ -42,7 +42,8 @@ export default function MentorDashboard() {
           experienceYears: p.experienceYears || 0,
           expertise: p.expertise || [],
           bio: p.bio || "",
-          pricePerMinute: p.pricePerMinute || 0,
+          // Store/display mentor fee as hourly in UI; backend persists per-minute.
+          pricePerMinute: (Number(p.pricePerMinute) || 0) * 60,
           timezone: p.timezone || "UTC",
           availability: p.availability || [],
           isActive: p.isActive !== false,
@@ -105,7 +106,11 @@ export default function MentorDashboard() {
     setSaving(true);
     setError("");
     try {
-      const saved = await upsertMyMentorProfile(form);
+      const payload = {
+        ...form,
+        pricePerMinute: Math.max(Number(form.pricePerMinute || 0) / 60, 0),
+      };
+      const saved = await upsertMyMentorProfile(payload);
       setProfile(saved);
       calculateProfileCompletion(saved);
       alert("Profile saved successfully!");
@@ -275,7 +280,7 @@ export default function MentorDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per minute (₹) *</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Price per hour (₹) *</label>
                     <input 
                       name="pricePerMinute" 
                       type="number" 

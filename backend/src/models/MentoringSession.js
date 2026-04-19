@@ -29,6 +29,10 @@ const mentoringSessionSchema = new mongoose.Schema(
     },
     paymentId: { type: String }, // Payment gateway transaction ID
     paymentMethod: { type: String }, // e.g., "razorpay", "stripe"
+    stripeCheckoutSessionId: { type: String, index: true },
+    stripePaymentIntentId: { type: String, index: true },
+    paidAt: { type: Date },
+    invoiceNumber: { type: String },
     notes: { type: String, maxlength: 500 },
     motivation: { type: String, maxlength: 1000 }, // Jobseeker's motivation for seeking mentorship
   },

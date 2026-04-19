@@ -7,6 +7,8 @@ const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const { Server } = require("socket.io");
 const { attachInterviewSocket } = require("./src/socket/interviewSocket");
+const { attachCommunitySocket } = require("./src/socket/communitySocket");
+const paymentCtrl = require("./src/controllers/paymentController");
 
 const app = express();
 
@@ -50,6 +52,7 @@ const startServer = async () => {
       },
     });
     attachInterviewSocket(io);
+    attachCommunitySocket(io);
 
     server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
@@ -73,8 +76,9 @@ const startServer = async () => {
         credentials: true,
       },
     });
-    attachInterviewSocket(io);
-    server.listen(PORT, () => {
+      attachInterviewSocket(io);
+      attachCommunitySocket(io);
+      server.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT} (without DB)`);
     });
   }
@@ -111,6 +115,11 @@ process.on('SIGINT', async () => {
 
 // Middlewares
 app.use(cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", credentials: true }));
+app.post(
+  "/api/payments/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  paymentCtrl.handleStripeWebhook
+);
 // Increase body size limits to allow base64 file uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -131,6 +140,7 @@ app.use("/api/mentors", require("./src/routes/mentorRoutes"));
 app.use("/api/bookings", require("./src/routes/bookingRoutes"));
 app.use("/api/mentoring-sessions", require("./src/routes/mentoringSessionRoutes"));
 app.use("/api/chat", require("./src/routes/chatRoutes"));
+app.use("/api/community", require("./src/routes/communityRoutes"));
 app.use("/api/scraper", require("./src/routes/scraperRoutes"));
 app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 app.use("/api/startups", require("./src/routes/startupRoutes"));
@@ -139,6 +149,7 @@ app.use("/api/rewards", require("./src/routes/rewardRoutes"));
 app.use("/api/mentorship-requests", require("./src/routes/mentorshipRequestRoutes"));
 app.use("/api/investor", require("./src/routes/investorRoutes"));
 app.use("/api/interview-sessions", require("./src/routes/interviewSessionRoutes"));
+app.use("/api/payments", require("./src/routes/paymentRoutes"));
 
 app.get("/", (req, res) => {
   if (mongoose.connection.readyState === 1) {

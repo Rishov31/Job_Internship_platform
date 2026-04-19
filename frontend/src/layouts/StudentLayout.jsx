@@ -70,7 +70,7 @@ export default function StudentLayout() {
 
   if (loading || !authUser) {
     return (
-      <div className="min-h-screen bg-[#050818] text-slate-400 flex items-center justify-center text-sm">
+      <div className="h-screen bg-[#050818] text-slate-400 flex items-center justify-center text-sm">
         Loading…
       </div>
     );
@@ -80,11 +80,11 @@ export default function StudentLayout() {
   const initial = displayName.trim().charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen flex bg-[#050818] text-slate-100">
+    <div className="h-screen flex overflow-hidden bg-[#050818] text-slate-100">
       <StudentSidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 px-4 md:px-8 flex items-center justify-between bg-[#050818]/95 border-b border-slate-800/80 backdrop-blur shrink-0">
-          <div className="flex items-center gap-3 flex-1 max-w-xl">
+      <div className="flex-1 flex flex-col min-w-0 md:ml-60 overflow-hidden">
+        <header className="h-14 md:h-16 shrink-0 z-30 px-4 md:px-8 flex items-center justify-between gap-4 border-b border-slate-800/90 bg-[#050818]/90 backdrop-blur-md supports-[backdrop-filter]:bg-[#050818]/75 shadow-[0_1px_0_0_rgba(15,23,42,0.6)]">
+          <div className="flex items-center gap-3 flex-1 min-w-0 max-w-xl">
             <div className="relative w-full">
               <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-500">
                 <svg
@@ -100,32 +100,32 @@ export default function StudentLayout() {
               <input
                 type="text"
                 placeholder="Search startups, roles, or skills..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-700/80 bg-slate-900/70 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-400"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-700/90 bg-slate-900/80 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400/60 transition-shadow"
               />
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="hidden sm:flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-xs text-slate-400">Student</p>
-                <p className="text-sm font-medium text-slate-100">{displayName}</p>
+              <div className="text-right hidden md:block">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500">Student</p>
+                <p className="text-sm font-medium text-slate-100 leading-tight">{displayName}</p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-xs font-semibold text-slate-100">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 ring-2 ring-slate-600/80 flex items-center justify-center text-xs font-semibold text-slate-100">
                 {initial}
               </div>
             </div>
             <button
               type="button"
               onClick={handleLogout}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900/60 hover:bg-slate-800"
+              className="text-xs font-medium px-3 py-2 rounded-xl border border-slate-600/80 bg-slate-900/80 text-slate-200 hover:bg-slate-800 hover:border-slate-500 transition-colors"
             >
               Logout
             </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto px-4 md:px-8 py-6 md:py-8 bg-[#050818] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),transparent_55%),radial-gradient(circle_at_bottom,_rgba(129,140,248,0.14),transparent_55%)]">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-4 md:px-8 py-5 md:py-6 bg-[#050818] bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.12),transparent_50%),radial-gradient(circle_at_bottom,_rgba(129,140,248,0.1),transparent_50%)]">
           <Outlet context={{ authUser, displayName, initial }} />
         </main>
       </div>

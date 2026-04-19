@@ -233,7 +233,7 @@ export default function StudentProfileCard({
         </div>
       </div>
 
-      <div className="px-4 py-3 border-b border-slate-800/90">
+      {/* <div className="px-4 py-3 border-b border-slate-800/90">
         <div className="flex items-center justify-between mb-2">
           <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">Skill proficiency</p>
           {proficiencyRows.some((r) => r.estimated) && (
@@ -262,7 +262,7 @@ export default function StudentProfileCard({
             ))
           )}
         </div>
-      </div>
+      </div> */}
 
       <div className="px-4 py-3 border-b border-slate-800/90 flex-1 min-h-0">
         <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Recent activity</p>

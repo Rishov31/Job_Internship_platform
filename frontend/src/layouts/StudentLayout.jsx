@@ -1,12 +1,36 @@
-import React, { useEffect, useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { me, logoutUser } from "../api/authApi";
 import StudentSidebar from "../components/student/StudentSidebar";
 
 export default function StudentLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [authUser, setAuthUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+
+  const refreshProfilePicture = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      setProfilePictureUrl(null);
+      return;
+    }
+    try {
+      const pr = await fetch("/api/jobseeker/profile", {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+      });
+      if (!pr.ok) {
+        setProfilePictureUrl(null);
+        return;
+      }
+      const p = await pr.json();
+      setProfilePictureUrl(p?.personalInfo?.profilePicture || null);
+    } catch {
+      setProfilePictureUrl(null);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +75,19 @@ export default function StudentLayout() {
       cancelled = true;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    refreshProfilePicture();
+  }, [authUser, location.pathname, refreshProfilePicture]);
+
+  useEffect(() => {
+    const onProfileUpdated = () => {
+      refreshProfilePicture();
+    };
+    window.addEventListener("jobseeker-profile-updated", onProfileUpdated);
+    return () => window.removeEventListener("jobseeker-profile-updated", onProfileUpdated);
+  }, [refreshProfilePicture]);
 
   const handleLogout = async () => {
     try {
@@ -111,9 +148,17 @@ export default function StudentLayout() {
                 <p className="text-[10px] uppercase tracking-wider text-slate-500">Student</p>
                 <p className="text-sm font-medium text-slate-100 leading-tight">{displayName}</p>
               </div>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 ring-2 ring-slate-600/80 flex items-center justify-center text-xs font-semibold text-slate-100">
-                {initial}
-              </div>
+              {profilePictureUrl ? (
+                <img
+                  src={profilePictureUrl}
+                  alt=""
+                  className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-600/80 shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 ring-2 ring-slate-600/80 flex items-center justify-center text-xs font-semibold text-slate-100 shrink-0">
+                  {initial}
+                </div>
+              )}
             </div>
             <button
               type="button"

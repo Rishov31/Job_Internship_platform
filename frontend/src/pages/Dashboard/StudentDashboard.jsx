@@ -137,6 +137,37 @@ function pickUpcomingMentoringSessions(sessions) {
     .slice(0, 10);
 }
 
+function isInterviewStageApplication(a) {
+  return (
+    a.status === "interview" ||
+    Boolean(a.metadata?.interview) ||
+    Boolean(a.metadata?.interviewSessionId)
+  );
+}
+
+/** Parse scheduled job interview time for ordering / countdown */
+function jobInterviewWhenIso(app) {
+  const iv = app.metadata?.interview;
+  if (!iv?.date) return null;
+  const raw = iv.time ? `${iv.date} ${iv.time}` : iv.date;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+function jobInterviewSortKey(app) {
+  const iso = jobInterviewWhenIso(app);
+  if (iso) return new Date(iso).getTime();
+  return new Date(app.updatedAt || app.appliedAt || app.createdAt || 0).getTime();
+}
+
+function pickUpcomingJobInterviews(applications) {
+  return (applications || [])
+    .filter(isInterviewStageApplication)
+    .sort((a, b) => jobInterviewSortKey(a) - jobInterviewSortKey(b))
+    .slice(0, 10);
+}
+
 export default function StudentDashboard() {
   const outlet = useOutletContext();
   const authUser = outlet?.authUser;
@@ -164,7 +195,8 @@ export default function StudentDashboard() {
   ]);
   /** null until first load of /contributions/student/me */
   const [contributions, setContributions] = useState(null);
-  const [appSummary, setAppSummary] = useState({ total: 0, interviews: 0 });
+  const [applications, setApplications] = useState([]);
+  const [applicationsLoading, setApplicationsLoading] = useState(true);
   const [mentoringSessions, setMentoringSessions] = useState([]);
   const [mentoringSessionsLoading, setMentoringSessionsLoading] = useState(true);
   const navigate = useNavigate();
@@ -194,11 +226,17 @@ export default function StudentDashboard() {
     [mentoringSessions]
   );
 
+  const upcomingJobInterviews = useMemo(
+    () => pickUpcomingJobInterviews(applications),
+    [applications]
+  );
+
   useEffect(() => {
     if (!authUser?.id) return;
     let cancelled = false;
     const API_BASE = "/api";
     const headers = { ...authHeader() };
+    setApplicationsLoading(true);
 
     // Load student profile basics from existing jobseeker profile
     fetch(`${API_BASE}/jobseeker/profile`, {
@@ -307,17 +345,15 @@ export default function StudentDashboard() {
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => {
-          if (cancelled || !data?.applications) return;
-          const apps = data.applications;
-          const interviews = apps.filter(
-            (a) =>
-              a.status === "interview" ||
-              a.metadata?.interview ||
-              a.metadata?.interviewSessionId
-          ).length;
-          setAppSummary({ total: apps.length, interviews });
+          if (cancelled) return;
+          setApplications(Array.isArray(data?.applications) ? data.applications : []);
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!cancelled) setApplications([]);
+        })
+        .finally(() => {
+          if (!cancelled) setApplicationsLoading(false);
+        });
 
       refreshMentoringSessions().finally(() => {
         if (!cancelled) setMentoringSessionsLoading(false);
@@ -559,106 +595,180 @@ export default function StudentDashboard() {
 
           <ContributorLeaderboard currentUserId={authUser?.id} compact />
 
-          <section className="mb-4 rounded-xl border border-slate-700/70 bg-slate-900/50 px-4 py-3 backdrop-blur flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-slate-200">Applications</p>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                {appSummary.total} job application{appSummary.total === 1 ? "" : "s"}
-                {appSummary.interviews > 0 && (
-                  <span className="text-violet-300">
-                    {" "}
-                    · {appSummary.interviews} upcoming interview
-                    {appSummary.interviews === 1 ? "" : "s"}
-                  </span>
-                )}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => navigate("/student/applications")}
-              className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-sky-600/90 text-white hover:bg-sky-500 border border-sky-500/30 shrink-0"
-            >
-              View all
-            </button>
-          </section>
-
-          {/* Ongoing mentorship sessions — dark theme to match dashboard */}
-          <section className="mb-6 rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 sm:p-5 backdrop-blur shadow-xl">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <h3 className="text-sm font-semibold text-slate-100 tracking-tight">
-                Ongoing Info Sessions
-              </h3>
-              <button
-                type="button"
-                onClick={() => navigate("/student/mentorship")}
-                className="text-xs font-semibold text-sky-400 hover:text-sky-300"
-              >
-                Mentorship hub →
-              </button>
-            </div>
-
-            {mentoringSessionsLoading ? (
-              <p className="text-sm text-slate-500 py-6 text-center">Loading sessions…</p>
-            ) : upcomingMentoringSessions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/40 px-4 py-8 text-center">
-                <p className="text-sm text-slate-300 font-medium">No upcoming sessions</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                  When you book and pay for a mentorship slot, it will show here with date and time.
-                </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            {/* Ongoing mentorship sessions */}
+            <section className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 sm:p-5 backdrop-blur shadow-xl min-h-0 flex flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 className="text-sm font-semibold text-slate-100 tracking-tight">
+                  Ongoing Info Sessions
+                </h3>
                 <button
                   type="button"
                   onClick={() => navigate("/student/mentorship")}
-                  className="mt-4 text-xs font-semibold px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500 border border-sky-500/40"
+                  className="text-xs font-semibold text-sky-400 hover:text-sky-300"
                 >
-                  Book a session
+                  Mentorship hub →
                 </button>
               </div>
-            ) : (
-              <div className="flex gap-4 overflow-x-auto pb-2 pt-1 -mx-1 px-1 scrollbar-thin [scrollbar-color:rgba(100,116,139,0.5)_transparent]">
-                {upcomingMentoringSessions.map((session) => {
-                  const cd = getSessionCountdown(session.startTime);
-                  const when = formatSessionCardWhen(session.startTime);
-                  const title = sessionCardTitle(session);
-                  return (
-                    <article
-                      key={session._id}
-                      className="min-w-[248px] max-w-[260px] shrink-0 rounded-xl border border-slate-700/90 bg-slate-950/50 p-4 shadow-inner flex flex-col"
-                    >
-                      <div className="flex items-center gap-2 text-sm font-medium text-rose-400">
-                        <svg
-                          className="w-4 h-4 shrink-0 text-rose-400/90"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                          aria-hidden
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        <span>{cd.text}</span>
-                      </div>
-                      <p className="mt-3 text-sm font-bold text-slate-50 leading-snug">{when}</p>
-                      <p className="mt-2 text-sm text-slate-400 leading-snug line-clamp-2">
-                        {title}
-                      </p>
-                      <p className="mt-1.5 text-xs text-slate-500">Online Session</p>
-                      <button
-                        type="button"
-                        onClick={() => navigate("/jobseeker/mentor-chats")}
-                        className="mt-4 w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold border border-sky-500/40 shadow-lg shadow-sky-900/20 transition-colors"
+
+              {mentoringSessionsLoading ? (
+                <p className="text-sm text-slate-500 py-6 text-center">Loading sessions…</p>
+              ) : upcomingMentoringSessions.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/40 px-4 py-8 text-center flex-1 flex flex-col justify-center">
+                  <p className="text-sm text-slate-300 font-medium">No upcoming sessions</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    When you book and pay for a mentorship slot, it will show here with date and time.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/student/mentorship")}
+                    className="mt-4 text-xs font-semibold px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500 border border-sky-500/40 mx-auto"
+                  >
+                    Book a session
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2 pt-1 -mx-1 px-1 scrollbar-thin [scrollbar-color:rgba(100,116,139,0.5)_transparent] flex-1">
+                  {upcomingMentoringSessions.map((session) => {
+                    const cd = getSessionCountdown(session.startTime);
+                    const when = formatSessionCardWhen(session.startTime);
+                    const title = sessionCardTitle(session);
+                    return (
+                      <article
+                        key={session._id}
+                        className="min-w-[248px] max-w-[260px] shrink-0 rounded-xl border border-slate-700/90 bg-slate-950/50 p-4 shadow-inner flex flex-col"
                       >
-                        Attend
-                      </button>
-                    </article>
-                  );
-                })}
+                        <div className="flex items-center gap-2 text-sm font-medium text-rose-400">
+                          <svg
+                            className="w-4 h-4 shrink-0 text-rose-400/90"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>{cd.text}</span>
+                        </div>
+                        <p className="mt-3 text-sm font-bold text-slate-50 leading-snug">{when}</p>
+                        <p className="mt-2 text-sm text-slate-400 leading-snug line-clamp-2">
+                          {title}
+                        </p>
+                        <p className="mt-1.5 text-xs text-slate-500">Online Session</p>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/jobseeker/mentor-chats")}
+                          className="mt-4 w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold border border-sky-500/40 shadow-lg shadow-sky-900/20 transition-colors"
+                        >
+                          Attend
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            {/* Job interviews — same shell as info sessions */}
+            <section className="rounded-2xl border border-slate-700/80 bg-slate-900/70 p-4 sm:p-5 backdrop-blur shadow-xl min-h-0 flex flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 className="text-sm font-semibold text-slate-100 tracking-tight">
+                  Upcoming Interview
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => navigate("/student/applications")}
+                  className="text-xs font-semibold text-sky-400 hover:text-sky-300"
+                >
+                  Applications →
+                </button>
               </div>
-            )}
-          </section>
+
+              {applicationsLoading ? (
+                <p className="text-sm text-slate-500 py-6 text-center">Loading interviews…</p>
+              ) : upcomingJobInterviews.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-600/80 bg-slate-950/40 px-4 py-8 text-center flex-1 flex flex-col justify-center">
+                  <p className="text-sm text-slate-300 font-medium">No upcoming interviews</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    When an employer schedules an interview for your application, it will show here with date and
+                    time.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/jobseeker/jobs")}
+                    className="mt-4 text-xs font-semibold px-4 py-2 rounded-lg bg-sky-600 text-white hover:bg-sky-500 border border-sky-500/40 mx-auto"
+                  >
+                    Browse jobs
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-4 overflow-x-auto pb-2 pt-1 -mx-1 px-1 scrollbar-thin [scrollbar-color:rgba(100,116,139,0.5)_transparent] flex-1">
+                  {upcomingJobInterviews.map((app) => {
+                    const whenIso = jobInterviewWhenIso(app);
+                    const cd = whenIso
+                      ? getSessionCountdown(whenIso)
+                      : { text: "Interview", overdue: false };
+                    const when = whenIso
+                      ? formatSessionCardWhen(whenIso)
+                      : "Date & time in Applications";
+                    const roleTitle = app.job?.title || "Interview";
+                    const company = app.job?.company || "Employer";
+                    const title = `${roleTitle} · ${company}`;
+                    const loc =
+                      app.metadata?.interview?.location ||
+                      (app.metadata?.interviewSessionId ? "Coding interview" : "See Applications");
+                    return (
+                      <article
+                        key={app._id}
+                        className="min-w-[248px] max-w-[260px] shrink-0 rounded-xl border border-slate-700/90 bg-slate-950/50 p-4 shadow-inner flex flex-col"
+                      >
+                        <div
+                          className={`flex items-center gap-2 text-sm font-medium ${
+                            cd.overdue ? "text-violet-400" : "text-violet-300/90"
+                          }`}
+                        >
+                          <svg
+                            className="w-4 h-4 shrink-0 text-violet-400/90"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            aria-hidden
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                          <span>{cd.text}</span>
+                        </div>
+                        <p className="mt-3 text-sm font-bold text-slate-50 leading-snug">{when}</p>
+                        <p className="mt-2 text-sm text-slate-400 leading-snug line-clamp-2">{title}</p>
+                        <p className="mt-1.5 text-xs text-slate-500 line-clamp-2">{loc}</p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            app.metadata?.interviewSessionId
+                              ? navigate(`/interview/coding/${app.metadata.interviewSessionId}`)
+                              : navigate("/student/applications")
+                          }
+                          className="mt-4 w-full py-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold border border-sky-500/40 shadow-lg shadow-sky-900/20 transition-colors"
+                        >
+                          {app.metadata?.interviewSessionId ? "Join interview" : "View details"}
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <button

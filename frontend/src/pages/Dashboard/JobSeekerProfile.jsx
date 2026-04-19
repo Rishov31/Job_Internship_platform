@@ -173,6 +173,11 @@ export default function JobSeekerProfile() {
     }
     setProfile(d);
     setForm((prev) => ({ ...prev, ...d }));
+    try {
+      window.dispatchEvent(new CustomEvent("jobseeker-profile-updated"));
+    } catch {
+      /* ignore */
+    }
     const cr = await fetch("/api/jobseeker/profile/completion", {
       headers: { Authorization: `Bearer ${token}` },
       credentials: "include",
@@ -267,11 +272,62 @@ export default function JobSeekerProfile() {
 
   const uploadAvatar = async (file) => {
     if (!file) return;
-    const fileUrl = URL.createObjectURL(file);
-    setForm((prev) => ({
-      ...prev,
-      personalInfo: { ...(prev.personalInfo || {}), profilePicture: fileUrl },
-    }));
+    if (!file.type.startsWith("image/")) {
+      alert("Please choose an image file.");
+      return;
+    }
+    const maxBytes = 2 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert("Image must be 2 MB or smaller.");
+      return;
+    }
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error("read"));
+      reader.readAsDataURL(file);
+    }).catch(() => null);
+    if (!dataUrl || typeof dataUrl !== "string") {
+      alert("Could not read that image.");
+      return;
+    }
+    let mergedPersonalInfo;
+    setForm((prev) => {
+      mergedPersonalInfo = { ...(prev.personalInfo || {}), profilePicture: dataUrl };
+      return { ...prev, personalInfo: mergedPersonalInfo };
+    });
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    try {
+      const r = await fetch("/api/jobseeker/profile/personalInfo", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: "include",
+        body: JSON.stringify(mergedPersonalInfo),
+      });
+      let body = {};
+      try {
+        body = await r.json();
+      } catch {
+        /* ignore */
+      }
+      if (!r.ok) {
+        alert(body.message || "Could not save profile photo.");
+        return;
+      }
+      setProfile(body);
+      setForm((prev) => ({ ...prev, ...body }));
+      try {
+        window.dispatchEvent(new CustomEvent("jobseeker-profile-updated"));
+      } catch {
+        /* ignore */
+      }
+    } catch {
+      alert("Network error while saving photo.");
+    }
   };
 
   const tabBtn = (id, label) => (
@@ -424,24 +480,25 @@ export default function JobSeekerProfile() {
                     {initials || "?"}
                   </div>
                 )}
-                {editing && (
-                  <>
-                    <button
-                      type="button"
-                      className="absolute -bottom-1 -right-1 text-[10px] px-2 py-0.5 rounded-lg bg-indigo-600 text-white"
-                      onClick={() => avatarInputRef.current?.click()}
-                    >
-                      Photo
-                    </button>
-                    <input
-                      ref={avatarInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => uploadAvatar(e.target.files?.[0])}
-                    />
-                  </>
-                )}
+                <>
+                  <button
+                    type="button"
+                    className="absolute -bottom-1 -right-1 text-[10px] px-2 py-0.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500"
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    {form?.personalInfo?.profilePicture ? "Change" : "Photo"}
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      uploadAvatar(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                </>
               </div>
               <div>
                 <p className="text-lg font-semibold text-slate-50">
